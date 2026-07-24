@@ -450,6 +450,27 @@ def _oneshot_clarify_callback(question: str, choices=None) -> str:
     )
 
 
+def _xz_stream_callback(text: str | None) -> None:
+    """Stream delta callback for -xz mode.
+
+    Writes token deltas directly to the original stdout (``sys.__stdout__``)
+    so they bypass the devnull redirect and appear immediately.
+
+    ``None`` signals a turn boundary — flush any pending output.
+    """
+    try:
+        real = sys.__stdout__
+    except AttributeError:
+        return
+    if text is None:
+        real.write("\n")
+        real.flush()
+        return
+    if text:
+        real.write(text)
+        real.flush()
+
+
 def _run_agent_with_history(
     prompt: str,
     session_id: str,
@@ -574,10 +595,11 @@ def _run_agent_with_history(
         clarify_callback=_oneshot_clarify_callback,
     )
 
-    # Belt-and-braces: make sure AIAgent doesn't invoke any streaming
-    # display callbacks that would bypass our stdout capture.
+    # Streaming output: write token deltas directly to the real stdout
+    # so they bypass the devnull redirect and appear immediately.
+    # tool_gen_callback stays None — tool-use banners are noise in -xz output.
     agent.suppress_status_output = True
-    agent.stream_delta_callback = None
+    agent.stream_delta_callback = _xz_stream_callback
     agent.tool_gen_callback = None
 
     result = agent.run_conversation(
