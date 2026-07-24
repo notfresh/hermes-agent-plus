@@ -12971,6 +12971,20 @@ def _try_termux_fast_cli_launch() -> bool:
         _print_version_info(check_updates=False)
         return True
 
+    if getattr(args, "xz", None):
+        _prepare_agent_startup(args)
+        from hermes_cli.oneshot import run_oneshot_with_session
+
+        sys.exit(
+            run_oneshot_with_session(
+                args.xz,
+                model=getattr(args, "model", None),
+                provider=getattr(args, "provider", None),
+                toolsets=getattr(args, "toolsets", None),
+                usage_file=getattr(args, "usage_file", None),
+            )
+        )
+
     if getattr(args, "oneshot", None):
         _prepare_agent_startup(args)
         from hermes_cli.oneshot import run_oneshot
@@ -15126,6 +15140,22 @@ def main():
     # list, gateway status, mcp add, ...) don't pay discovery cost or
     # trigger consent prompts for hooks the user is still inspecting.
     _prepare_agent_startup(args)
+
+    # Handle top-level --xz / -xz / -zx: oneshot with session history.
+    # Check this before --oneshot since they are mutually exclusive and argparse
+    # allows both to be present in the namespace (only one is non-None).
+    if getattr(args, "xz", None):
+        from hermes_cli.oneshot import run_oneshot_with_session
+
+        sys.exit(
+            run_oneshot_with_session(
+                args.xz,
+                model=getattr(args, "model", None),
+                provider=getattr(args, "provider", None),
+                toolsets=getattr(args, "toolsets", None),
+                usage_file=getattr(args, "usage_file", None),
+            )
+        )
 
     # Handle top-level --oneshot / -z: single-shot mode, stdout = final
     # response only, nothing else. Bypasses cli.py entirely.
