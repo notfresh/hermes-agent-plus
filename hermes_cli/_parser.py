@@ -99,9 +99,13 @@ def build_top_level_parser():
     parser.add_argument(
         "--version", "-V", action="store_true", help="Show version and exit"
     )
-    parser.add_argument(
+    # -z / --oneshot and -xz / --xz / -zx are mutually exclusive.
+    # Both -xz and -zx map to args.xz (identical behaviour).
+    oneshot_group = parser.add_mutually_exclusive_group()
+    oneshot_group.add_argument(
         "-z",
         "--oneshot",
+        dest="oneshot",
         metavar="PROMPT",
         default=None,
         help=(
@@ -111,6 +115,27 @@ def build_top_level_parser():
             "AGENTS.md in the CWD are loaded as normal; approvals are "
             "auto-bypassed. Intended for scripts / pipes."
         ),
+    )
+    oneshot_group.add_argument(
+        "-xz",
+        "--xz",
+        dest="xz",
+        metavar="PROMPT",
+        default=None,
+        help=(
+            "One-shot mode with session history: like -z, but loads the most "
+            "recent CLI/TUI session's full conversation before sending the prompt. "
+            "-xz and -zx are synonyms. Exits after printing the final response."
+        ),
+    )
+    oneshot_group.add_argument(
+        "-zx",
+        "--zx",
+        dest="xz",
+        metavar="PROMPT",
+        default=None,
+        # No help text — users discover it via -xz's description.
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--usage-file",
