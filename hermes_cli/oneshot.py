@@ -448,3 +448,295 @@ def _oneshot_clarify_callback(question: str, choices=None) -> str:
         "[oneshot mode: no user available. Make the most reasonable "
         "assumption you can and continue.]"
     )
+
+
+def _run_agent_with_history(
+    prompt: str,
+    session_id: str,
+    conversation_history: list,
+    model: Optional[str] = None,
+    provider: Optional[str] = None,
+    toolsets: object = None,
+    use_config_toolsets: bool = True,
+) -> tuple[str, dict]:
+    """Build an AIAgent exactly like ``_run_agent`` does, but resume an
+    existing session by passing ``session_id`` and the loaded conversation
+    history.  Returns ``(final_response, run_result)``."""
+    # Imports are local so they don't run when hermes is invoked for
+    # other commands (keeps top-level CLI startup cheap).
+    from hermes_cli.config import load_config
+    from hermes_cli.models import detect_provider_for_model
+    from hermes_cli.runtime_provider import resolve_runtime_provider
+    from hermes_cli.tools_config import _get_platform_tools
+    from hermes_state import SessionDB
+    from run_agent import AIAgent
+
+    cfg = load_config()
+
+    # Resolve effective model: explicit arg → env var → config.
+    model_cfg = cfg.get("model") or {}
+    if isinstance(model_cfg, str):
+        cfg_model = model_cfg
+    else:
+        cfg_model = model_cfg.get("default") or model_cfg.get("model") or ""
+
+    env_model = os.getenv("HERMES_INFERENCE_MODEL", "").strip()
+    effective_model = (model or "").strip() or env_model or cfg_model
+
+    # Resolve effective provider: explicit arg → (auto-detect from model if
+    # model was explicit) → env / config (handled inside resolve_runtime_provider).
+    #
+    # When --model is given without --provider, auto-detect the provider that
+    # serves that model — same semantic as `/model <name>` in an interactive
+    # session.  Without this, resolve_runtime_provider() would fall back to
+    # the user's configured default provider, which may not host the model
+    # the caller just asked for.
+    effective_provider = (provider or "").strip() or None
+    explicit_base_url_from_alias: Optional[str] = None
+    if effective_provider is None and (model or env_model):
+        # Only auto-detect when the model was explicitly requested via arg or
+        # env var (not when it came from config — that's the "use my defaults"
+        # path and the configured provider is already correct).
+        explicit_model = (model or "").strip() or env_model
+        if explicit_model:
+            # First check DIRECT_ALIASES populated from config.yaml `model_aliases:`.
+            # These map a user-defined alias to (model, provider, base_url) for
+            # endpoints not in any catalog (local servers, custom proxies, etc.).
+            try:
+                from hermes_cli import model_switch as _ms
+                _ms._ensure_direct_aliases()
+                direct = _ms.DIRECT_ALIASES.get(explicit_model.strip().lower())
+            except Exception:
+                direct = None
+            if direct is not None:
+                effective_model = direct.model
+                effective_provider = direct.provider
+                if direct.base_url:
+                    explicit_base_url_from_alias = direct.base_url.rstrip("/")
+            else:
+                cfg_provider = ""
+                if isinstance(model_cfg, dict):
+                    cfg_provider = str(model_cfg.get("provider") or "").strip().lower()
+                current_provider = (
+                    cfg_provider
+                    or os.getenv("HERMES_INFERENCE_PROVIDER", "").strip().lower()
+                    or "auto"
+                )
+                detected = detect_provider_for_model(explicit_model, current_provider)
+                if detected:
+                    effective_provider, effective_model = detected
+
+    runtime = resolve_runtime_provider(
+        requested=effective_provider,
+        target_model=effective_model or None,
+        explicit_base_url=explicit_base_url_from_alias,
+    )
+
+    # Pull in explicit toolsets when provided; otherwise use whatever the user
+    # has enabled for "cli". sorted() gives stable ordering for config-derived
+    # sets; explicit values preserve user order.
+    toolsets_list = _normalize_toolsets(toolsets)
+    if toolsets_list is None and use_config_toolsets:
+        toolsets_list = sorted(_get_platform_tools(cfg, "cli"))
+
+    # Full SessionDB instance (not the best-effort _create_session_db_for_oneshot)
+    # so the resumed run persists messages back to the same session.
+    session_db = SessionDB()
+
+    # Read the effective fallback chain from profile config so oneshot workers
+    # honour the same merge semantics as interactive CLI and gateway sessions.
+    _fb = get_fallback_chain(cfg)
+
+    agent = AIAgent(
+        api_key=runtime.get("api_key"),
+        base_url=runtime.get("base_url"),
+        provider=runtime.get("provider"),
+        api_mode=runtime.get("api_mode"),
+        model=effective_model,
+        enabled_toolsets=toolsets_list,
+        quiet_mode=True,
+        platform="cli",
+        session_id=session_id,
+        session_db=session_db,
+        credential_pool=runtime.get("credential_pool"),
+        fallback_model=_fb or None,
+        # Interactive callbacks are intentionally NOT wired beyond this
+        # one.  In oneshot mode there's no user sitting at a terminal:
+        #   - clarify  → returns a synthetic "pick a default" instruction
+        #                so the agent continues instead of stalling on
+        #                the tool's built-in "not available" error
+        #   - sudo password prompt → terminal_tool gates on
+        #                HERMES_INTERACTIVE which we never set
+        #   - shell-hook approval → auto-approved via HERMES_ACCEPT_HOOKS=1
+        #                (set above); also falls back to deny on non-tty
+        #   - dangerous-command approval → bypassed via HERMES_YOLO_MODE=1
+        #   - skill secret capture → returns gracefully when no callback set
+        clarify_callback=_oneshot_clarify_callback,
+    )
+
+    # Belt-and-braces: make sure AIAgent doesn't invoke any streaming
+    # display callbacks that would bypass our stdout capture.
+    agent.suppress_status_output = True
+    agent.stream_delta_callback = None
+    agent.tool_gen_callback = None
+
+    result = agent.run_conversation(
+        prompt, conversation_history=conversation_history
+    )
+    return (result.get("final_response") or "", result)
+
+
+def run_oneshot_with_session(
+    prompt: str,
+    model: Optional[str] = None,
+    provider: Optional[str] = None,
+    toolsets: object = None,
+    usage_file: Optional[str] = None,
+) -> int:
+    """Execute a single prompt as a continuation of the most recent session.
+
+    Resumes the latest session (across CLI and TUI sources) and runs the
+    prompt against it, then prints only the final content block and exits.
+
+    Args:
+        prompt: The user message to send.
+        model: Optional model override. Falls back to HERMES_INFERENCE_MODEL
+            env var, then config.yaml's model.default / model.model.
+        provider: Optional provider override. Falls back to config.yaml's
+            model.provider, then "auto".
+        toolsets: Optional comma-separated string or iterable of toolsets.
+        usage_file: Optional path; when set, a JSON usage report (estimated
+            cost, token counts, model, api_calls) is written there after the
+            run — even when the run fails — so pipelines can account for
+            spend per invocation.
+
+    Returns the exit code.  Caller should sys.exit() with the return.
+    """
+    # Silence every stdlib logger for the duration.  AIAgent, tools, and
+    # provider adapters all log to stderr through the root logger; file
+    # handlers added by setup_logging() keep working (they're attached to
+    # the root logger's handler list, not affected by level), but no
+    # bytes reach the terminal.
+    logging.disable(logging.CRITICAL)
+
+    # --provider without --model is ambiguous: carrying the user's configured
+    # model across to a different provider is usually wrong (that provider may
+    # not host it), and silently picking the provider's catalog default hides
+    # the mismatch.  Require the caller to be explicit.  Validate BEFORE the
+    # stderr redirect so the message actually reaches the terminal.
+    env_model_early = os.getenv("HERMES_INFERENCE_MODEL", "").strip()
+    if provider and not ((model or "").strip() or env_model_early):
+        sys.stderr.write(
+            "hermes -xz: --provider requires --model (or HERMES_INFERENCE_MODEL). "
+            "Pass both explicitly, or neither to use your configured defaults.\n"
+        )
+        return 2
+
+    explicit_toolsets, toolsets_error = _validate_explicit_toolsets(toolsets)
+    if toolsets_error:
+        # Re-prefix the error so users see the -xz variant consistently.
+        prefixed = toolsets_error.replace("hermes -z:", "hermes -xz:", 1)
+        sys.stderr.write(prefixed)
+        return 2
+    use_config_toolsets = _normalize_toolsets(toolsets) is None
+
+    # Resolve the most recent session across CLI and TUI sources. ``source=None``
+    # surfaces both, ordered by last_active desc — exactly the one a user
+    # coming back to a previous conversation would expect to resume.
+    from hermes_state import SessionDB
+
+    sessions = SessionDB().search_sessions(source=None, limit=1)
+    if not sessions:
+        sys.stderr.write("hermes -xz: no session found to resume\n")
+        return 2
+    session_id = sessions[0]["id"]
+
+    # Load the full transcript as OpenAI-format messages. ``repair_alternation``
+    # fixes durable role-sequence violations left by older turns (e.g. a
+    # ``user;user`` pair) so the resumed turn doesn't re-trigger defensive
+    # repair on every subsequent request for the rest of the session's life.
+    conversation_history = SessionDB().get_messages_as_conversation(
+        session_id, repair_alternation=True
+    )
+    if not conversation_history:
+        sys.stderr.write("hermes -xz: no session found to resume\n")
+        return 2
+
+    # Auto-approve any shell / tool approvals.  Non-interactive by
+    # definition — a prompt would hang forever.
+    os.environ["HERMES_YOLO_MODE"] = "1"
+    os.environ["HERMES_ACCEPT_HOOKS"] = "1"
+
+    # One-shot prints a single final response and exits: there is no later turn
+    # for a detached subagent's completion to re-enter, and nothing here drains
+    # process_registry.completion_queue (only cli.py's interactive process_loop
+    # and the gateway watchers do). Left unbound, async_delivery_supported()
+    # defaults True, delegate_task is forced background, and every subagent
+    # result is discarded. Declaring the channel stateless routes delegate_task
+    # to its inline/synchronous path. See declare_stateless_channel().
+    declare_stateless_channel()
+
+    # Redirect stderr AND stdout to devnull for the entire call tree.
+    # We'll print the final response to the real stdout at the end.
+    real_stdout = sys.stdout
+    real_stderr = sys.stderr
+    devnull = open(os.devnull, "w", encoding="utf-8")
+
+    response: Optional[str] = None
+    result: dict = {}
+    failure: BaseException | None = None
+    try:
+        with redirect_stdout(devnull), redirect_stderr(devnull):
+            try:
+                response, result = _run_agent_with_history(
+                    prompt,
+                    session_id=session_id,
+                    conversation_history=conversation_history,
+                    model=model,
+                    provider=provider,
+                    toolsets=explicit_toolsets,
+                    use_config_toolsets=use_config_toolsets,
+                )
+            except BaseException as exc:  # noqa: BLE001
+                # Capture anything that escapes the agent (including OSError
+                # from prompt_toolkit/Vt100 when stdout is a non-TTY pipe,
+                # KeyboardInterrupt, SystemExit, etc.) so we can surface it on
+                # the real stderr instead of crashing past the redirect with a
+                # traceback that the caller never sees. A silent exit in a
+                # cron / SSH / subprocess context is the worst failure mode.
+                # See #30623.
+                failure = exc
+    finally:
+        try:
+            devnull.close()
+        except Exception:
+            pass
+
+    if failure is not None:
+        # Re-raise control-flow exceptions so the parent handles them as usual
+        # (Ctrl-C / explicit sys.exit() inside the agent).
+        if isinstance(failure, (KeyboardInterrupt, SystemExit)):
+            _write_usage_file(usage_file, result, failure=repr(failure))
+            raise failure
+        _write_usage_file(usage_file, result, failure=str(failure))
+        real_stderr.write(f"hermes -xz: agent failed: {failure}\n")
+        real_stderr.flush()
+        return 1
+
+    _write_usage_file(usage_file, result)
+
+    if response:
+        real_stdout.write(response)
+        if not response.endswith("\n"):
+            real_stdout.write("\n")
+        real_stdout.flush()
+
+    if (result.get("failed") or result.get("partial")) and not (response or "").strip():
+        return 2
+
+    if not (response or "").strip():
+        real_stderr.write("hermes -xz: no final response was produced; treating the run as failed.\n")
+        real_stderr.flush()
+        return 1
+
+    return 0
