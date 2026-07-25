@@ -27,7 +27,7 @@ def acquire_shell_context_lock() -> bool:
     _lock_path().parent.mkdir(parents=True, exist_ok=True)
     _lock_handle = open(_lock_path(), "a+", encoding="utf-8")
     try:
-        fcntl.fcntl(_lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(_lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         return True
     except (BlockingIOError, OSError):
         _lock_handle.close()
@@ -40,7 +40,7 @@ def release_shell_context_lock() -> None:
     if _lock_handle is None:
         return
     try:
-        fcntl.fcntl(_lock_handle.fileno(), fcntl.LOCK_UN)
+        fcntl.flock(_lock_handle.fileno(), fcntl.LOCK_UN)
     except OSError:
         pass
     try:
@@ -74,8 +74,8 @@ def is_shell_context_lock_active() -> bool:
         return False
     try:
         handle = open(_lock_path(), "a+", encoding="utf-8")
-        fcntl.fcntl(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        fcntl.fcntl(handle.fileno(), fcntl.LOCK_UN)
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         handle.close()
         return False
     except (BlockingIOError, OSError):
@@ -215,7 +215,7 @@ def _launch_daemon() -> None:
     # Use "a+" mode like the parent did
     lock_file = open(str(_lock_path()), "a+", encoding="utf-8")
     try:
-        fcntl.fcntl(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except (BlockingIOError, OSError):
         os._exit(1)  # Another daemon claimed the lock; exit gracefully
 
