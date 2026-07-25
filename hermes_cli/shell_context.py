@@ -3,6 +3,7 @@ import fcntl
 import atexit
 import json
 import sys
+import time
 from pathlib import Path
 
 _HERMES_HOME = os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
@@ -88,20 +89,19 @@ def get_shell_context_pid() -> int | None:
         return None
 
 import asyncio
-import os
-import atexit
 from aiohttp import web
 
 # Module-level cache set after prewarm completes
 _prewarmed_plugins: list[dict] = []
 _prewarmed_mcp: dict = {}
-_prewarm_done: bool = False
+_prewarm_plugins_done: bool = False
+_prewarm_mcp_done: bool = False
 
 async def _handle_health(request):
     return web.json_response({
-        "status": "ready" if _prewarm_done else "warming",
+        "status": "ready" if (_prewarm_plugins_done and _prewarm_mcp_done) else "warming",
         "pid": os.getpid(),
-        "prewarmed": {"plugins": _prewarm_done, "mcp": _prewarm_done},
+        "prewarmed": {"plugins": _prewarm_plugins_done, "mcp": _prewarm_mcp_done},
     })
 
 async def _handle_plugins(request):
@@ -130,7 +130,7 @@ async def run_uds_server():
 
 def prewarm() -> None:
     """Run discover_plugins() and discover_mcp_tools(). Stores results in module globals."""
-    global _prewarmed_plugins, _prewarmed_mcp, _prewarm_done
+    global _prewarmed_plugins, _prewarmed_mcp, _prewarm_plugins_done, _prewarm_mcp_done
 
     # discover_plugins
     try:
@@ -141,8 +141,10 @@ def prewarm() -> None:
             {"name": p.name, "version": getattr(p, "version", "unknown")}
             for p in _plugin_manager._plugins.values()
         ]
-    except Exception as e:
+    except Exception:
         _prewarmed_plugins = []
+
+    _prewarm_plugins_done = True
 
     # discover_mcp_tools
     try:
@@ -155,10 +157,10 @@ def prewarm() -> None:
                 "tools": getattr(server, "_tools", []),
                 "error": getattr(server, "_error", None),
             }
-    except Exception as e:
+    except Exception:
         _prewarmed_mcp = {}
 
-    _prewarm_done = True
+    _prewarm_mcp_done = True
 
 def check_daemon_health() -> dict | None:
     """Query the running daemon's /health endpoint over UDS. Returns None if daemon not running."""
@@ -175,3 +177,63 @@ def check_daemon_health() -> dict | None:
         return asyncio.run(_query())
     except Exception:
         return None
+
+def ensure_shell_context_daemon() -> bool:
+    """Check if daemon is running. If not, fork one and wait for it to become ready.
+
+    Returns True if the daemon is warm and ready. Caller should skip inline discovery.
+    Returns False if daemon is not available (fall back to inline discovery).
+    """
+    if not is_shell_context_lock_active():
+        return False  # No daemon, fall back to inline
+
+    health = check_daemon_health()
+    if health is None:
+        return False
+
+    if health.get("status") == "ready":
+        return True
+
+    # Daemon is warming up — poll for up to 2s
+    for _ in range(10):  # 10 retries × 200ms = 2s
+        time.sleep(0.2)
+        health = check_daemon_health()
+        if health and health.get("status") == "ready":
+            return True
+
+    return False
+
+def _launch_daemon() -> None:
+    """Fork a child process that becomes the daemon. Does not return."""
+    pid = os.fork()
+    if pid > 0:
+        # Parent: pid > 0 is child's PID, just return
+        return
+
+    # Child process (pid == 0):
+    # Re-acquire the lock in this process (flock is NOT inherited across fork)
+    # Use "a+" mode like the parent did
+    lock_file = open(str(_lock_path()), "a+", encoding="utf-8")
+    try:
+        fcntl.fcntl(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (BlockingIOError, OSError):
+        os._exit(1)  # Another daemon claimed the lock; exit gracefully
+
+    write_shell_context_pid()
+    atexit.register(remove_shell_context_pid)
+
+    # Run prewarm in this child process
+    prewarm()
+
+    # Now serve UDS (blocking)
+    asyncio.run(run_uds_server())
+    os._exit(0)
+
+def start_daemon() -> bool:
+    """Start the daemon if not already running. Returns True if started or already running."""
+    if not acquire_shell_context_lock():
+        # Already held (another process has the lock)
+        return True
+    # We acquired the lock — fork the daemon
+    _launch_daemon()
+    return True
