@@ -4,6 +4,8 @@ import atexit
 import json
 import sys
 import time
+import datetime
+import logging
 from pathlib import Path
 
 _HERMES_HOME = os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
@@ -203,31 +205,50 @@ def ensure_shell_context_daemon() -> bool:
 
     return False
 
+def _daemon_log(msg: str) -> None:
+    """Write a timestamped line to the daemon log at ~/.hermes/shell-context.log."""
+    try:
+        path = _pid_path().parent / "shell-context.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} [daemon] {msg}\n")
+    except Exception:
+        pass
+
+
 def _launch_daemon() -> None:
     """Fork a child process that becomes the daemon. Does not return."""
+    _daemon_log("forking")
     pid = os.fork()
     if pid > 0:
         # Parent: pid > 0 is child's PID, just return
+        _daemon_log(f"parent returning, child pid={pid}")
         return
 
     # Child process (pid == 0):
     # Re-acquire the lock in this process (flock is NOT inherited across fork)
-    # Use "a+" mode like the parent did
+    _daemon_log("child: re-acquiring lock")
     lock_file = open(str(_lock_path()), "a+", encoding="utf-8")
     try:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except (BlockingIOError, OSError):
+        _daemon_log("child: lock acquired")
+    except (BlockingIOError, OSError) as e:
+        _daemon_log(f"child: lock failed {e}, exiting")
         os._exit(1)  # Another daemon claimed the lock; exit gracefully
 
+    _daemon_log("child: writing pid")
     write_shell_context_pid()
     atexit.register(remove_shell_context_pid)
 
-    # Run prewarm in this child process
+    _daemon_log("child: starting prewarm")
     prewarm()
+    _daemon_log("child: prewarm done, starting UDS server")
 
     # Now serve UDS (blocking)
     asyncio.run(run_uds_server())
+    _daemon_log("child: UDS server exited unexpectedly")
     os._exit(0)
+
 
 def start_daemon() -> bool:
     """Start the daemon if not already running. Returns True if started or already running."""
@@ -235,5 +256,6 @@ def start_daemon() -> bool:
         # Already held (another process has the lock)
         return True
     # We acquired the lock — fork the daemon
+    _daemon_log("start_daemon: forking")
     _launch_daemon()
     return True
