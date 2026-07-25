@@ -86,3 +86,92 @@ def get_shell_context_pid() -> int | None:
         return json.loads(_pid_path().read_text())["pid"]
     except Exception:
         return None
+
+import asyncio
+import os
+import atexit
+from aiohttp import web
+
+# Module-level cache set after prewarm completes
+_prewarmed_plugins: list[dict] = []
+_prewarmed_mcp: dict = {}
+_prewarm_done: bool = False
+
+async def _handle_health(request):
+    return web.json_response({
+        "status": "ready" if _prewarm_done else "warming",
+        "pid": os.getpid(),
+        "prewarmed": {"plugins": _prewarm_done, "mcp": _prewarm_done},
+    })
+
+async def _handle_plugins(request):
+    return web.json_response({"plugins": _prewarmed_plugins})
+
+async def _handle_mcp(request):
+    return web.json_response({"servers": _prewarmed_mcp})
+
+async def run_uds_server():
+    """Run the UDS HTTP server. Blocks forever (until SIGTERM)."""
+    app = web.Application()
+    app.router.add_get("/health", _handle_health)
+    app.router.add_get("/prewarmed_plugins", _handle_plugins)
+    app.router.add_get("/prewarmed_mcp", _handle_mcp)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.UnixSite(runner, str(_socket_path()))
+    await site.start()
+
+    # Remove socket file on exit
+    atexit.register(lambda: _socket_path().unlink(missing_ok=True))
+
+    # Wait forever
+    await asyncio.Event().wait()
+
+def prewarm() -> None:
+    """Run discover_plugins() and discover_mcp_tools(). Stores results in module globals."""
+    global _prewarmed_plugins, _prewarmed_mcp, _prewarm_done
+
+    # discover_plugins
+    try:
+        from hermes_cli.plugins import discover_plugins
+        discover_plugins()
+        from hermes_cli.plugins import _plugin_manager
+        _prewarmed_plugins = [
+            {"name": p.name, "version": getattr(p, "version", "unknown")}
+            for p in _plugin_manager._plugins.values()
+        ]
+    except Exception as e:
+        _prewarmed_plugins = []
+
+    # discover_mcp_tools
+    try:
+        from tools.mcp_tool import discover_mcp_tools
+        discover_mcp_tools()
+        from tools.mcp_tool import _mcp_tool_registry
+        _prewarmed_mcp = {}
+        for name, server in (_mcp_tool_registry._servers or {}).items():
+            _prewarmed_mcp[name] = {
+                "tools": getattr(server, "_tools", []),
+                "error": getattr(server, "_error", None),
+            }
+    except Exception as e:
+        _prewarmed_mcp = {}
+
+    _prewarm_done = True
+
+def check_daemon_health() -> dict | None:
+    """Query the running daemon's /health endpoint over UDS. Returns None if daemon not running."""
+    import aiohttp
+    import asyncio
+    try:
+        if not _socket_path().exists():
+            return None
+        async def _query():
+            async with aiohttp.UnixConnector(path=str(_socket_path())) as conn:
+                async with aiohttp.ClientSession(connector=conn) as sess:
+                    async with sess.get("http://localhost/health") as resp:
+                        return await resp.json()
+        return asyncio.run(_query())
+    except Exception:
+        return None
