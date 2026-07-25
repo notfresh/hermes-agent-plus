@@ -26,75 +26,95 @@
 - Create: `hermes_cli/shell_context.py`
 
 **Interfaces:**
-- Produces: `acquire_shell_context_lock()`, `release_shell_context_lock()`, `write_shell_context_pid()`, `remove_shell_context_pid()`, `is_shell_context_lock_active()`, `get_shell_context_pid()`, `_lock_path()`, `_pid_path()`, `_socket_path()` — all module-level functions
+- Produces: `acquire_shell_context_lock()`, `release_shell_context_lock()`, `write_shell_context_pid()`, `remove_shell_context_pid()`, `is_shell_context_lock_active()`, `get_shell_context_pid()`, `_lock_path()`, `_pid_path()`, `_socket_path()`, `_lock_handle` (module-level open fd)
 
-Copy the gateway pattern from `gateway/status.py`. Key functions:
+Copy the gateway pattern from `gateway/status.py` EXACTLY. Key rules:
+- Open lock file in `"a+"` mode (append, don't truncate)
+- Keep the open fd globally as `_lock_handle` so the flock is held
+- `is_shell_context_lock_active()`: try `LOCK_EX | LOCK_NB`; if `BlockingIOError` → lock held
+- `write_shell_context_pid()`: use `os.O_CREAT | os.O_EXCL` for atomic create-if-absent (raises `FileExistsError` if daemon already wrote it — that's fine, means daemon is running)
 
 ```python
 import os
 import fcntl
 import atexit
 import json
+import sys
 from pathlib import Path
 
-HERMES_HOME = os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
+_HERMES_HOME = os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
 
 def _lock_path() -> Path:
-    return Path(HERMES_HOME) / "shell-context.lock"
+    return Path(_HERMES_HOME) / "shell-context.lock"
 
 def _pid_path() -> Path:
-    return Path(HERMES_HOME) / "shell-context.pid"
+    return Path(_HERMES_HOME) / "shell-context.pid"
 
 def _socket_path() -> Path:
-    return Path(HERMES_HOME) / "shell-context.sock"
+    return Path(_HERMES_HOME) / "shell-context.sock"
+
+_lock_handle = None
 
 def acquire_shell_context_lock() -> bool:
-    """Try to acquire exclusive lock. Returns True if acquired, False if already held."""
-    lock_file = open(_lock_path(), "w")
-    try:
-        fcntl.fcntl(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    """Try to acquire exclusive flock. Returns True if acquired, False if already held."""
+    global _lock_handle
+    if _lock_handle is not None:
         return True
-    except BlockingIOError:
+    _lock_path().parent.mkdir(parents=True, exist_ok=True)
+    _lock_handle = open(_lock_path(), "a+", encoding="utf-8")
+    try:
+        fcntl.fcntl(_lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except (BlockingIOError, OSError):
+        _lock_handle.close()
+        _lock_handle = None
         return False
 
-def release_shell_context_lock(lock_file=None) -> None:
+def release_shell_context_lock() -> None:
     """Release the lock."""
-    if lock_file is None:
-        try:
-            lock_file = open(_lock_path(), "w")
-            fcntl.fcntl(lock_file.fileno(), fcntl.LOCK_UN)
-        except Exception:
-            pass
+    global _lock_handle
+    if _lock_handle is None:
         return
     try:
-        fcntl.fcntl(lock_file.fileno(), fcntl.LOCK_UN)
-    except Exception:
+        fcntl.fcntl(_lock_handle.fileno(), fcntl.LOCK_UN)
+    except OSError:
         pass
+    try:
+        _lock_handle.close()
+    except OSError:
+        pass
+    _lock_handle = None
 
 def write_shell_context_pid() -> None:
-    """Write {pid, start_time} to pid file."""
-    pid_file = _pid_path()
-    pid_file.parent.mkdir(parents=True, exist_ok=True)
-    pid_file.write_text(json.dumps({
-        "pid": os.getpid(),
-        "start_time": os.path.getctime(pid_file) if pid_file.exists() else 0,
-    }))
+    """Write {pid, start_time} to pid file atomically. Raises FileExistsError if already exists."""
+    _pid_path().parent.mkdir(parents=True, exist_ok=True)
+    record = json.dumps({"pid": os.getpid(), "start_time": os.path.getctime(_pid_path()) if _pid_path().exists() else 0})
+    fd = os.open(_pid_path(), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    try:
+        os.write(fd, record.encode("utf-8"))
+    finally:
+        os.close(fd)
 
 def remove_shell_context_pid() -> None:
     """Remove the pid file."""
     try:
         _pid_path().unlink()
-    except Exception:
+    except OSError:
         pass
 
 def is_shell_context_lock_active() -> bool:
-    """Check if the lock is currently held by another process."""
-    try:
-        lock_file = open(_lock_path(), "w")
-        fcntl.fcntl(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        fcntl.fcntl(lock_file.fileno(), fcntl.LOCK_UN)
+    """Check if the lock is held by another process."""
+    if _lock_handle is not None:
+        return True
+    if not _lock_path().exists():
         return False
-    except BlockingIOError:
+    try:
+        handle = open(_lock_path(), "a+", encoding="utf-8")
+        fcntl.fcntl(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.fcntl(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+        return False
+    except (BlockingIOError, OSError):
         return True
 
 def get_shell_context_pid() -> int | None:
