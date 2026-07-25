@@ -100,6 +100,7 @@ _prewarm_plugins_done: bool = False
 _prewarm_mcp_done: bool = False
 
 async def _handle_health(request):
+    _daemon_log(f"request: /health from {request.remote}")
     return web.json_response({
         "status": "ready" if (_prewarm_plugins_done and _prewarm_mcp_done) else "warming",
         "pid": os.getpid(),
@@ -107,13 +108,16 @@ async def _handle_health(request):
     })
 
 async def _handle_plugins(request):
+    _daemon_log(f"request: /prewarmed_plugins from {request.remote}")
     return web.json_response({"plugins": _prewarmed_plugins})
 
 async def _handle_mcp(request):
+    _daemon_log(f"request: /prewarmed_mcp from {request.remote}")
     return web.json_response({"servers": _prewarmed_mcp})
 
 async def run_uds_server():
     """Run the UDS HTTP server. Blocks forever (until SIGTERM)."""
+    _daemon_log("UDS server starting")
     app = web.Application()
     app.router.add_get("/health", _handle_health)
     app.router.add_get("/prewarmed_plugins", _handle_plugins)
@@ -123,6 +127,7 @@ async def run_uds_server():
     await runner.setup()
     site = web.UnixSite(runner, str(_socket_path()))
     await site.start()
+    _daemon_log(f"UDS server listening on {_socket_path()}")
 
     # Remove socket file on exit
     atexit.register(lambda: _socket_path().unlink(missing_ok=True))
@@ -143,8 +148,10 @@ def prewarm() -> None:
             {"name": p.name, "version": getattr(p, "version", "unknown")}
             for p in _plugin_manager._plugins.values()
         ]
-    except Exception:
+        _daemon_log(f"prewarm plugins: {len(_prewarmed_plugins)} loaded")
+    except Exception as e:
         _prewarmed_plugins = []
+        _daemon_log(f"prewarm plugins failed: {e}")
 
     _prewarm_plugins_done = True
 
@@ -159,8 +166,10 @@ def prewarm() -> None:
                 "tools": getattr(server, "_tools", []),
                 "error": getattr(server, "_error", None),
             }
-    except Exception:
+        _daemon_log(f"prewarm MCP: {len(_prewarmed_mcp)} servers")
+    except Exception as e:
         _prewarmed_mcp = {}
+        _daemon_log(f"prewarm MCP failed: {e}")
 
     _prewarm_mcp_done = True
 
