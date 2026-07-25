@@ -12834,6 +12834,15 @@ def _should_background_mcp_startup(args) -> bool:
 
 def _prepare_agent_startup(args) -> None:
     """Discover plugins/MCP/hooks for commands that can run an agent turn."""
+    # Shell context daemon: if warm, skip plugin/MCP discovery
+    _shell_context_warm = False
+    try:
+        from hermes_cli.shell_context import ensure_shell_context_daemon
+        if ensure_shell_context_daemon():
+            _shell_context_warm = True
+    except Exception:
+        pass
+
     # --yolo: chokepoint guarantee that HERMES_YOLO_MODE is set before ANY
     # plugin/tool discovery below imports tools.approval, which freezes
     # _YOLO_MODE_FROZEN at import time (PR #7994 security design).  main()'s
@@ -12853,15 +12862,16 @@ def _prepare_agent_startup(args) -> None:
         return
 
     _accept_hooks = bool(getattr(args, "accept_hooks", False))
-    try:
-        from hermes_cli.plugins import discover_plugins
+    if not _shell_context_warm:
+        try:
+            from hermes_cli.plugins import discover_plugins
 
-        discover_plugins()
-    except Exception:
-        logger.warning(
-            "plugin discovery failed at CLI startup",
-            exc_info=True,
-        )
+            discover_plugins()
+        except Exception:
+            logger.warning(
+                "plugin discovery failed at CLI startup",
+                exc_info=True,
+            )
     _run_inline_mcp_discovery = True
     if _is_tui_chat_launch(args):
         # The TUI launcher hands off to a dedicated startup path that already
@@ -12886,7 +12896,7 @@ def _prepare_agent_startup(args) -> None:
                 exc_info=True,
             )
         _run_inline_mcp_discovery = False
-    if _run_inline_mcp_discovery:
+    if not _shell_context_warm and _run_inline_mcp_discovery:
         try:
             # MCP tool discovery remains synchronous for entrypoints that do
             # not own a later bounded/executor startup path.
@@ -12972,6 +12982,12 @@ def _try_termux_fast_cli_launch() -> bool:
         return True
 
     if getattr(args, "xz", None):
+        # Start daemon if not running (fork-on-demand)
+        try:
+            from hermes_cli.shell_context import start_daemon
+            start_daemon()
+        except Exception:
+            pass  # Fall back to inline if this fails
         _prepare_agent_startup(args)
         from hermes_cli.oneshot import run_oneshot_with_session
 
@@ -12986,6 +13002,12 @@ def _try_termux_fast_cli_launch() -> bool:
         )
 
     if getattr(args, "oneshot", None):
+        # Start daemon if not running (fork-on-demand)
+        try:
+            from hermes_cli.shell_context import start_daemon
+            start_daemon()
+        except Exception:
+            pass  # Fall back to inline if this fails
         _prepare_agent_startup(args)
         from hermes_cli.oneshot import run_oneshot
 
@@ -15145,6 +15167,12 @@ def main():
     # Check this before --oneshot since they are mutually exclusive and argparse
     # allows both to be present in the namespace (only one is non-None).
     if getattr(args, "xz", None):
+        # Start daemon if not running (fork-on-demand)
+        try:
+            from hermes_cli.shell_context import start_daemon
+            start_daemon()
+        except Exception:
+            pass  # Fall back to inline if this fails
         from hermes_cli.oneshot import run_oneshot_with_session
 
         sys.exit(
@@ -15160,6 +15188,12 @@ def main():
     # Handle top-level --oneshot / -z: single-shot mode, stdout = final
     # response only, nothing else. Bypasses cli.py entirely.
     if getattr(args, "oneshot", None):
+        # Start daemon if not running (fork-on-demand)
+        try:
+            from hermes_cli.shell_context import start_daemon
+            start_daemon()
+        except Exception:
+            pass  # Fall back to inline if this fails
         from hermes_cli.oneshot import run_oneshot
 
         sys.exit(
