@@ -91,6 +91,16 @@ class TestPidFile:
         sc.remove_shell_context_pid()
         assert not sc._pid_path().exists()
 
+    def test_write_replaces_stale_pid_file(self, tmp_path, monkeypatch):
+        sc = _reload_sc(monkeypatch, tmp_path)
+        sc._pid_path().write_text('{"pid": 1, "start_time": 0}', encoding="utf-8")
+
+        sc.write_shell_context_pid()
+
+        payload = sc._pid_path().read_text(encoding="utf-8")
+        assert '"pid": 1' not in payload
+        assert sc.get_shell_context_pid() == os.getpid()
+
 
 class TestEnsureDaemon:
     def test_returns_false_when_no_daemon(self, tmp_path, monkeypatch):
@@ -108,3 +118,48 @@ class TestEnsureDaemon:
         result = sc.start_daemon()  # may fork but will fail without socket server
         # Just verify it returns bool
         assert isinstance(result, bool)
+
+    def test_start_daemon_waits_for_ready_health(self, tmp_path, monkeypatch):
+        sc = _reload_sc(monkeypatch, tmp_path)
+        calls = {"launch": 0, "health": 0}
+
+        monkeypatch.setattr(sc, "is_shell_context_lock_active", lambda: False)
+
+        def _fake_launch():
+            calls["launch"] += 1
+
+        def _fake_health():
+            calls["health"] += 1
+            if calls["health"] < 3:
+                return None
+            return {"status": "ready"}
+
+        monkeypatch.setattr(sc, "_launch_daemon", _fake_launch)
+        monkeypatch.setattr(sc, "check_daemon_health", _fake_health)
+
+        assert sc.start_daemon() is True
+        assert calls["launch"] == 1
+        assert calls["health"] >= 3
+
+
+class TestPromptLogging:
+    def test_log_oneshot_prompt_single_line(self, tmp_path, monkeypatch):
+        sc = _reload_sc(monkeypatch, tmp_path)
+
+        sc.log_oneshot_prompt("z", "line1\nline2\rline3")
+
+        log_path = tmp_path / "shell-context.log"
+        assert log_path.exists()
+        text = log_path.read_text(encoding="utf-8")
+        assert "oneshot[z]" in text
+        assert "line1 line2 line3" in text
+
+    def test_log_oneshot_prompt_truncates(self, tmp_path, monkeypatch):
+        sc = _reload_sc(monkeypatch, tmp_path)
+        prompt = "x" * 50
+
+        sc.log_oneshot_prompt("xz", prompt, max_chars=10)
+
+        text = (tmp_path / "shell-context.log").read_text(encoding="utf-8")
+        assert "oneshot[xz]" in text
+        assert "<truncated:40>" in text

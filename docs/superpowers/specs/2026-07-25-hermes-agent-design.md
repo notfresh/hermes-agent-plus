@@ -1,16 +1,20 @@
-# Spec: Hermes Agent Daemon (`hermes-agent`) — Pre-warm Daemon for `-z`
+# Spec: Shell Context Daemon (`shell-context`) — Pre-warm Daemon for `-z / -xz / -zx`
 
 ## Overview
 
-A background daemon (`hermes-agent`) that pre-warms plugin and MCP discovery,
-keeping results cached in-memory. When `hermes -z` runs, it checks for the
+> **Note:** In this document, `-z` refers to all oneshot modes: `-z`, `-xz`, and `-zx`. They share the same discovery and pre-warm logic.
+
+A background daemon (`shell-context`) that pre-warms plugin and MCP discovery,
+keeping results cached in-memory. When `hermes -z`, `hermes -xz`, or `hermes -zx`
+runs, it checks for the
 running daemon via a lock file and queries the pre-warmed cache over a Unix
 Domain Socket, bypassing the expensive `discover_plugins()` and `discover_mcp_tools()`
 calls entirely.
 
 ```
-hermes -z "hello"   # first time: daemon not running → fork daemon → pre-warm → return
-hermes -z "hello"   # daemon already warm → query via UDS → instant response
+hermes -z "hello"    # first time: daemon not running → fork daemon → pre-warm → return
+hermes -xz "hello"   # daemon already warm → query via UDS → instant response
+hermes -zx "hello"   # daemon already warm → query via UDS → instant response
 ```
 
 ## Architecture
@@ -20,20 +24,19 @@ hermes -z "hello"   # daemon already warm → query via UDS → instant response
 Daemon lifecycle managed via filesystem locks — same pattern as `gateway.lock` /
 `gateway.pid` in `gateway/status.py`:
 
-- `$HERMES_HOME/hermes-agent.lock` — held via `fcntl.flock`; released on exit
-- `$HERMES_HOME/hermes-agent.pid` — JSON `{pid, start_time}`; verified before use
+- `$HERMES_HOME/shell-context.lock` — held via `fcntl.flock`; released on exit
+- `$HERMES_HOME/shell-context.pid` — JSON `{pid, start_time}`; verified before use
 
 Acquire protocol on daemon start:
-1. Try `fcntl.flock(LOCK_EX | LOCK_NB)` on `hermes-agent.lock`
+1. Try `fcntl.flock(LOCK_EX | LOCK_NB)` on `shell-context.lock`
 2. If lock held by another process → daemon already running; exit 0
-3. Write `hermes-agent.pid`
+3. Write `shell-context.pid`
 4. Register `atexit` cleanup
 
 ### IPC: Unix Domain Socket
 
-Socket path: `$HERMES_HOME/hermes-agent.sock`
+Socket path: `$HERMES_HOME/shell-context.sock`
 
-Server runs in the daemon process using Python's `asyncio` + `unix_server`.
 Minimal HTTP-over-UDS surface:
 
 ```
@@ -63,8 +66,8 @@ complex than the current scope.
 
 `hermes -z` at startup:
 
-1. Check if `hermes-agent.lock` is held (non-blocking flock)
-2. If held → daemon running; connect to `hermes-agent.sock` and query `/health`
+1. Check if `shell-context.lock` is held (non-blocking flock)
+2. If held → daemon running; connect to `shell-context.sock` and query `/health`
 3. If not held → fork a child process that becomes the daemon:
    - Child: releases the inherited flock (per `fork()` semantics the lock is
      NOT held in the child), re-acquires it, starts UDS server, runs
@@ -80,8 +83,8 @@ the daemon's startup **once** — on subsequent calls the daemon is already up.
 Daemon has no主动 shutdown — it runs until killed or the system reboots.
 On crash, the `flock` is automatically released by the OS.
 
-A `hermes-agent stop` command can be added later that sends SIGTERM to the PID
-read from `hermes-agent.pid`.
+A `shell-context stop` command can be added later that sends SIGTERM to the PID
+read from `shell-context.pid`.
 
 ## Files
 
@@ -89,14 +92,14 @@ read from `hermes-agent.pid`.
 |---|---|
 | `hermes_cli/agent_daemon.py` | New: UDS server, pre-warm logic, fork parent-side IPC |
 | `hermes_cli/main.py` | Modify: `-z` entry point checks/launches daemon |
-| `hermes_cli/__init__.py` | Add `agent` subcommand stub (future: `hermes-agent start/stop`) |
+| `hermes_cli/__init__.py` | Add `agent` subcommand stub (future: `shell-context start/stop`) |
 | `gateway/status.py` | Reference: lock/pid pattern to copy |
 
 ## Interaction with existing code
 
 - `discover_plugins()` — already idempotent (`_discovered` flag); called once per daemon lifetime
 - `discover_mcp_tools()` — already cached per `mcp_startup.py`; daemon calls it once
-- `hermes -z` — only change: check daemon before calling `_prepare_agent_startup()`;
+- `hermes -z` / `-xz` / `-zx` — only change: check daemon before calling `_prepare_agent_startup()`;
   if daemon is warm, skip `discover_plugins()` and `discover_mcp_tools()` from the inline path
 - Gateway — unchanged; independent of this daemon
 

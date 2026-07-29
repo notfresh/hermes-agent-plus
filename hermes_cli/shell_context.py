@@ -8,16 +8,16 @@ import datetime
 import logging
 from pathlib import Path
 
-_HERMES_HOME = os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
+from hermes_constants import get_hermes_home
 
 def _lock_path() -> Path:
-    return Path(_HERMES_HOME) / "shell-context.lock"
+    return get_hermes_home() / "shell-context.lock"
 
 def _pid_path() -> Path:
-    return Path(_HERMES_HOME) / "shell-context.pid"
+    return get_hermes_home() / "shell-context.pid"
 
 def _socket_path() -> Path:
-    return Path(_HERMES_HOME) / "shell-context.sock"
+    return get_hermes_home() / "shell-context.sock"
 
 _lock_handle = None
 
@@ -52,14 +52,13 @@ def release_shell_context_lock() -> None:
     _lock_handle = None
 
 def write_shell_context_pid() -> None:
-    """Write {pid, start_time} to pid file atomically. Raises FileExistsError if already exists."""
+    """Write {pid, start_time} to pid file atomically, replacing stale files."""
     _pid_path().parent.mkdir(parents=True, exist_ok=True)
-    record = json.dumps({"pid": os.getpid(), "start_time": os.path.getctime(_pid_path()) if _pid_path().exists() else 0})
-    fd = os.open(_pid_path(), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-    try:
-        os.write(fd, record.encode("utf-8"))
-    finally:
-        os.close(fd)
+    record = json.dumps({"pid": os.getpid(), "start_time": time.time()})
+    tmp_path = _pid_path().with_suffix(".pid.tmp")
+    tmp_path.write_text(record, encoding="utf-8")
+    tmp_path.chmod(0o644)
+    tmp_path.replace(_pid_path())
 
 def remove_shell_context_pid() -> None:
     """Remove the pid file."""
@@ -220,9 +219,21 @@ def _daemon_log(msg: str) -> None:
         path = _pid_path().parent / "shell-context.log"
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a", encoding="utf-8") as f:
-            f.write(f"{datetime.now().isoformat()} [daemon] {msg}\n")
+            f.write(f"{datetime.datetime.now().isoformat()} [daemon] {msg}\n")
     except Exception:
         pass
+
+
+def log_oneshot_prompt(mode: str, prompt: str, *, max_chars: int = 400) -> None:
+    """Log a one-shot prompt invocation for -z/-xz observability.
+
+    Newlines are collapsed so each prompt is a single log line and very long
+    prompts are truncated to keep the daemon log readable.
+    """
+    text = (prompt or "").replace("\r", " ").replace("\n", " ").strip()
+    if len(text) > max_chars:
+        text = f"{text[:max_chars]}...<truncated:{len(text)-max_chars}>"
+    _daemon_log(f"oneshot[{mode}] prompt={text!r}")
 
 
 def _launch_daemon() -> None:
@@ -261,10 +272,24 @@ def _launch_daemon() -> None:
 
 def start_daemon() -> bool:
     """Start the daemon if not already running. Returns True if started or already running."""
-    if not acquire_shell_context_lock():
-        # Already held (another process has the lock)
-        return True
-    # We acquired the lock — fork the daemon
+    # Do not hold the lock in the parent before forking. If the parent acquires
+    # it first, the child can fail to re-acquire and exit, leaving no daemon.
+    if is_shell_context_lock_active():
+        _daemon_log("start_daemon: already active")
+        health = check_daemon_health()
+        return bool(health)
+
+    # No daemon appears active: fork and let the child acquire+hold the lock.
     _daemon_log("start_daemon: forking")
     _launch_daemon()
-    return True
+
+    # Wait briefly for child to bind the socket and finish prewarm.
+    deadline = time.time() + 2.0
+    while time.time() < deadline:
+        health = check_daemon_health()
+        if health and health.get("status") == "ready":
+            return True
+        time.sleep(0.1)
+
+    # Fallback: report daemon as active only if lock is now held.
+    return is_shell_context_lock_active()

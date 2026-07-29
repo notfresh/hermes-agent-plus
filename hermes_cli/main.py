@@ -12984,7 +12984,8 @@ def _try_termux_fast_cli_launch() -> bool:
     if getattr(args, "xz", None):
         # Start daemon if not running (fork-on-demand)
         try:
-            from hermes_cli.shell_context import start_daemon
+            from hermes_cli.shell_context import log_oneshot_prompt, start_daemon
+            log_oneshot_prompt("xz", args.xz)
             start_daemon()
         except Exception:
             pass  # Fall back to inline if this fails
@@ -13004,7 +13005,8 @@ def _try_termux_fast_cli_launch() -> bool:
     if getattr(args, "oneshot", None):
         # Start daemon if not running (fork-on-demand)
         try:
-            from hermes_cli.shell_context import start_daemon
+            from hermes_cli.shell_context import log_oneshot_prompt, start_daemon
+            log_oneshot_prompt("z", args.oneshot)
             start_daemon()
         except Exception:
             pass  # Fall back to inline if this fails
@@ -15156,23 +15158,18 @@ def main():
     if getattr(args, "yolo", False):
         os.environ["HERMES_YOLO_MODE"] = "1"
 
-    # Discover Python plugins and register shell hooks once, before any
-    # command that can fire lifecycle hooks.  Both are idempotent; gated
-    # so introspection/management commands (hermes hooks list, cron
-    # list, gateway status, mcp add, ...) don't pay discovery cost or
-    # trigger consent prompts for hooks the user is still inspecting.
-    _prepare_agent_startup(args)
-
     # Handle top-level --xz / -xz / -zx: oneshot with session history.
     # Check this before --oneshot since they are mutually exclusive and argparse
     # allows both to be present in the namespace (only one is non-None).
     if getattr(args, "xz", None):
         # Start daemon if not running (fork-on-demand)
         try:
-            from hermes_cli.shell_context import start_daemon
+            from hermes_cli.shell_context import log_oneshot_prompt, start_daemon
+            log_oneshot_prompt("xz", args.xz)
             start_daemon()
         except Exception:
             pass  # Fall back to inline if this fails
+        _prepare_agent_startup(args)
         from hermes_cli.oneshot import run_oneshot_with_session
 
         sys.exit(
@@ -15190,10 +15187,12 @@ def main():
     if getattr(args, "oneshot", None):
         # Start daemon if not running (fork-on-demand)
         try:
-            from hermes_cli.shell_context import start_daemon
+            from hermes_cli.shell_context import log_oneshot_prompt, start_daemon
+            log_oneshot_prompt("z", args.oneshot)
             start_daemon()
         except Exception:
             pass  # Fall back to inline if this fails
+        _prepare_agent_startup(args)
         from hermes_cli.oneshot import run_oneshot
 
         sys.exit(
@@ -15205,6 +15204,13 @@ def main():
                 usage_file=getattr(args, "usage_file", None),
             )
         )
+
+    # Discover Python plugins and register shell hooks once, before any
+    # command that can fire lifecycle hooks.  Both are idempotent; gated
+    # so introspection/management commands (hermes hooks list, cron
+    # list, gateway status, mcp add, ...) don't pay discovery cost or
+    # trigger consent prompts for hooks the user is still inspecting.
+    _prepare_agent_startup(args)
 
     # Handle top-level --resume / --continue as shortcut to chat
     if (args.resume or args.continue_last) and args.command is None:
