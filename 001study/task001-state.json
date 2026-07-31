@@ -1,0 +1,52 @@
+{
+  "task_id": "001",
+  "name": "Hermes Agent 源码探索 + 好做的 Issue 猎手",
+  "status": "running",
+  "tick_count": 4,
+  "phase": "deep_dive_gateway",
+  "phase_order": [
+    "architecture_overview",
+    "deep_dive_agent",
+    "deep_dive_tools",
+    "deep_dive_plugins",
+    "deep_dive_cron_scheduler",
+    "deep_dive_gateway",
+    "deep_dive_skills_memory",
+    "issue_scanning"
+  ],
+  "current_module": "deep_dive_gateway",
+  "modules_explored": [
+    "architecture_overview", 
+    "deep_dive_agent", 
+    "deep_dive_tools", 
+    "deep_dive_plugins", 
+    "deep_dive_cron_scheduler", 
+    "deep_dive_gateway"
+  ],
+  "reports_generated": [
+    "report-1-architecture_overview.md",
+    "report-2-deep_dive_agent.md",
+    "teach-3-tool-system.md",
+    "teach-4-plugin-system.md",
+    "teach-5-cron-scheduler.md",
+    "teach-6-gateway.md"
+  ],
+  "issues_identified": [],
+  "awaiting_answer": false,
+  "last_question": "接下来你想做什么？1. 继续探索 skills/memory 2. 扫 upstream issue 3. 换方向",
+  "last_tick_time": "2026-07-31T09:10:00+08:00",
+  "notes": [
+    "项目有 3129 个 Python 文件，3 个 God File",
+    "工具系统由 3 层构成：registry auto-discovery + toolsets 组合 + model_tools 分发",
+    "tools/ 下有 95 个 .py 文件，通过 registry.register() 自动注册",
+    "核心工具有 ~80 个（_HERMES_CORE_TOOLS），扩展工具集不计其数",
+    "check_fn 有 30s TTL 缓存 + 60s 瞬态失败宽容期",
+    "Plugin 和 MCP 都通过 registry 注册，和内置工具没有区别对待",
+    "dispatch 前有 4 层安全过滤：check_fn → 中间件 → plugin hooks → 文件安全",
+    "Gateway 是 Hermes 的对外窗口：适配器模式支持 N 平台，管道模式处理消息",
+    "Gateway 46 个 .py 文件，共 46,543 行，核心是 GatewayRunner（~23K LOC）",
+    "BasePlatformAdapter (5933 行) 是平台适配器的 ABC，start/stop/send/send_typing/send_image 等 20+ 方法",
+    "流式输出用 queue.Queue 桥接同步 agent 回调和异步平台投递（GatewayStreamConsumer）",
+    "Gateway 支持多 Profile 复用：一个实例用多个 bot token 同时连接 Telegram/Discord 等"
+  ]
+}

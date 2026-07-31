@@ -7,5 +7,6 @@ subcommands such as `gateway`, `cron`, and `doctor`.
 """
 
 if __name__ == "__main__":
+    print("你好！！")
     from hermes_cli.main import main
     main()
