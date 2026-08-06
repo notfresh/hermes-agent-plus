@@ -1,0 +1,4 @@
+file,line,class,method,is_core,reason
+run_agent.py,399,AIAgent,__init__,YES,是 Agent 主入口类，每个对话都会调用，40+ 参数涵盖完整功能
+hermes_state.py,3251,SessionDB,get_session,YES,是 SessionDB 核心查询方法，被调用 435 次，是会话管理的必经路径
+agent/conversation_loop.py,588,,run_conversation,YES,Agent 核心引擎，AI 对话循环主入口，包含消息构建/LLM 调用/工具执行/响应处理

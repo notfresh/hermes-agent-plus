@@ -2,7 +2,7 @@
   "task_id": "001",
   "name": "Hermes Agent 源码探索 + 好做的 Issue 猎手",
   "status": "running",
-  "tick_count": 32,
+  "tick_count": 38,
   "phase": "issue_scanning",
   "phase_order": [
     "architecture_overview",
@@ -14,7 +14,7 @@
     "deep_dive_skills_memory",
     "issue_scanning"
   ],
-  "current_module": "issue_scanning（用户决策B 08-04：已撞车但教学价值高的 PR 当教材 → #77538/#77549 写 teach-14/15）",
+  "current_module": "issue_scanning（tick 38：两个候选撞车验证 + 新候选 #79788 fallback URL 重写）",
   "modules_explored": [
     "architecture_overview",
     "deep_dive_agent",
@@ -41,9 +41,162 @@
     "teach-14-context-engine-lifecycle.md",
     "teach-15-compaction-progress-gate.md",
     "teach-16-issue-premise-verification.md",
-    "teach-17-length-continuation-counter.md"
+    "teach-17-length-continuation-counter.md",
+    "teach-18-config-type-contract.md",
+    "teach-19-concurrent-start-gate.md",
+    "issue-12-79623-cron-session-provenance.md"
   ],
   "issues_identified": [
+    {
+      "number": 79771,
+      "title": "CI speed: tracker — merge gate ~230s → ~150s, total run ~8min → ~4min",
+      "labels": "type/perf, area/docker, P3",
+      "difficulty": "—",
+      "status": "🟡 记录 — CI 类，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05T23:47Z 创建。"
+    },
+    {
+      "number": 79772,
+      "title": "Slack Feature Parity & Alignment Campaign — meta-issue",
+      "labels": "type/feature, comp/plugins, platform/slack, P3",
+      "difficulty": "—",
+      "status": "🟡 记录 — platform/slack 类，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05T23:47Z 创建，meta-issue。"
+    },
+    {
+      "number": 79806,
+      "title": "[Bug]: Desktop composer does not scroll caret into view after large paste or voice input",
+      "labels": "type/bug, P3, comp/desktop",
+      "difficulty": "—",
+      "status": "🟡 记录 — desktop UI 类，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-06T00:53Z 创建。"
+    },
+    {
+      "number": 79807,
+      "title": "[Bug]: Desktop composer model pill flashes the profile-default reasoning effort",
+      "labels": "type/bug, P3, comp/desktop",
+      "difficulty": "—",
+      "status": "🟡 记录 — desktop UI 类，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-06T00:54Z 创建。"
+    },
+    {
+      "number": 79797,
+      "title": "Feature: config-enforced required skills for cron jobs (cron.required_skills)",
+      "labels": "type/feature, comp/cron, tool/skills, area/config",
+      "difficulty": "—（已撞车）",
+      "status": "🔴 已撞车 — 创建 08-06T00:33Z，PR #79808 (feat(cron): enforce required skills via cron.required_skills) 00:43Z 即 cross-ref（10 分钟内秒抢）。弃用。",
+      "fix_point": "cron 配置加载 + 任务创建/更新校验（skills[] 必须包含 required_skills）",
+      "fix_idea": "弃用。教学点：cron 任务 skills 加载机制（与我们自身运行方式直接相关：本任务就靠 skills 字段加载 github-issues skill）。",
+      "notes": "🎯 命中学习重心（skill 加载 + cron）但 feature 类秒抢。reporter 提到的痛点（输出缺 [SILENT] 规则、语言漂移）正是 cron 生态现实问题。"
+    },
+    {
+      "number": 79788,
+      "title": "Fallback provider with anthropic_messages api_mode gets URL rewritten to /v1（fallback 激活时 _to_openai_base_url 把 /anthropic 后缀无条件重写为 /v1，且显式 api_mode 配置在 fallback 路径被忽略）",
+      "labels": "type/bug, comp/agent, provider/anthropic, area/config",
+      "difficulty": "★★☆（两处小改：_to_openai_base_url api_mode 感知 + fallback 传显式 api_mode；根因已本地验证）",
+      "status": "🟢 干净候选（08-06T09:0X 核查）— 创建 08-06T00:11Z，无 assignee/评论/cross-ref。已本地验证根因链。⚠️ reporter 自带详尽复现（完整 fallback yaml 配置），按历史规律自带复现≈秒抢，推荐要快。",
+      "fix_point": "agent/auxiliary_client.py:4912（resolve_provider_client custom 分支无条件 _to_openai_base_url(explicit_base_url)）+ :773-800（_to_openai_base_url 对 /anthropic 后缀一律重写 /v1，docstring 假设『auxiliary 永远打 OpenAI 面』）+ agent/chat_completion_helpers.py:1632-1639（_try_activate_fallback 只读 base_url/api_key/key_env，不读 fb.get('api_mode')）",
+      "fix_idea": "方案A（最小）：_to_openai_base_url 加 api_mode 感知——api_mode=='anthropic_messages'（或调用方声明要 Anthropic 面）时保留 /anthropic 后缀不重写；方案B（完整）：_try_activate_fallback 把 fb.get('api_mode') 传给 resolve_provider_client（1645 行加 api_mode=...），顺带修复『显式 api_mode 被忽略』；两案都需补测试：fallback 激活后 client.base_url 保持 /anthropic + api_mode=anthropic_messages → Anthropic 传输层追加 /v1/messages 正确落地。",
+      "notes": "🎯 命中学习重心（fallback 机制，teach-12 同族）！教学点：① helper 函数的隐藏假设（_to_openai_base_url 名字+docstring 写死『转 OpenAI 格式』，没考虑 Anthropic 面调用者）；② 配置字段在一条路径被读、另一条路径被忽略（显式 api_mode 在 primary 路径生效，fallback 路径从不读）；③ 重写发生在 api_mode 推断（chat_completion_helpers.py:1671-1682 用重写后的 URL 推断 → endswith(/anthropic) 失灵）之前——顺序敏感。与 #77256（fallback api_mode 推断漏 kimi anthropic_messages）同族。"
+    },
+    {
+      "number": 79623,
+      "title": "Cron sessions omit workdir and Git repository provenance（cron 会话 sessions 行 cwd/git_repo_root/git_branch 全 NULL；CLI 会话也只有 cwd 没有 git 字段）",
+      "labels": "type/bug, comp/cli, comp/cron, P2, sweeper:risk-session-state, sweeper:risk-compatibility, area/sessions",
+      "difficulty": "★★☆（两个小改动 ~30 行：_launch_cwd_for_session 加 cron 分支 + _ensure_db_session 建行时探测 git；本地已完整验证根因链）",
+      "status": "🔴 已撞车（推荐后 ~7h 被抢）— 08-06T09:0X 核查：PR #79766 (fix(cron): stamp session cwd from configured workdir, thatssoheil, open, +80/-2, 2 files, mergeable=unstable) 已 cross-ref。**实现与本地方案A方向完全一致**（_launch_cwd_for_session 加 cron 分支），但机制更精确：读 agent.runtime_cwd._session_cwd_override() contextvar（scheduler 已把 workdir pin 进 _SESSION_CWD），而非我们设想的 TERMINAL_CWD env。附 5 个回归测试（cron 有/无/失效 workdir + cli/gateway 不变）。教学验证：『设计前提过期』判断正确——PR 作者也改了 docstring 说明 cron 是例外。",
+      "fix_point": "run_agent.py:68-89 _launch_cwd_for_session（source != cli 一律 None → cron cwd=NULL）；run_agent.py:613-623 _ensure_db_session（create_session 只传 cwd 不传 git 字段）；hermes_state.py:2435 update_session_cwd 支持 git 字段但只在 tui_gateway/server.py 调用",
+      "fix_idea": "方案A：_launch_cwd_for_session 加 source==\"cron\" 分支读 TERMINAL_CWD（cron/scheduler.py:3019 已 bridge workdir，锁保护下安全）；方案B：建行后调 update_session_cwd 补写 git 字段（_insert_session_row hermes_state.py:1940-1990 已确认不接受 git 参数，改走 update_session_cwd 更干净——该函数已支持 git 字段+空值保护+有测试），git_probe.repo_root git_probe.py:140 + branch git_probe.py:68 探测工具齐全。",
+      "notes": "🎯 命中学习重心（会话管理）！教学点：①『设计前提过期』型 bug（_launch_cwd_for_session 注释说 cron 无稳定 cwd，但 cron workdir 功能上线后前提不成立）；② TERMINAL_CWD 环境变量 bridge 单向性（只流向工具执行，不流向会话元数据）；③ 三层写入路径不对称（CLI 建行/cron 建行/TUI 前端补写，两条没写全）。与 teach-16（premise verification）呼应——这是前提真过期的正面案例。 08-06T09:0X 撞车更新：PR #79766 验证了分析方向（新增 cron 分支），纠正一个细节——workdir 的传递机制是 _SESSION_CWD contextvar（agent/runtime_cwd.py）而非 TERMINAL_CWD env bridge。教学点：contextvar（进程内、随调用栈）vs env var（全局、跨进程）两种状态传递的选择。issue-12 报告需加撞车注记。"
+    },
+    {
+      "number": 79624,
+      "title": "[Bug] Gateway crashes with exit(1) during preflight compaction on restart — oversized session（重启时预检压缩崩溃，网关 failed/active 反复横跳）",
+      "labels": "type/bug, comp/agent, comp/gateway, P1, sweeper:risk-session-state, area/sessions, area/compression",
+      "difficulty": "—（已撞车）",
+      "status": "🔴 已撞车 — 创建 08-05T19:24Z，PR #79691 (fix(gateway): catch preflight compaction timeouts gracefully, StanleyStetson) 已 cross-ref。⚠️ 核查时发现 PR #79691 是 closed 且 merged=False（未合并被关）——撞车但修复未落地，可关注后续。弃用（教学素材）。",
+      "fix_point": "preflight compaction（98,304 token 阈值触发）崩溃路径，exit(1) 未捕获",
+      "fix_idea": "弃用。教学点：压缩的 preflight 阶段（与 teach-15 compaction 门控同族）。",
+      "notes": "P1 + 压缩机制命中学习重心，但被秒抢（~1.5h）。PR closed/未合并说明修复质量可能有问题——值得观察其后续（重开？替代 PR？）。"
+    },
+    {
+      "number": 79698,
+      "title": "Memory routing asymmetry: built-in memory gets ~300-word guidance + periodic review nudges while provider fact stores get almost nothing（系统提示词过度导向内置 MEMORY.md/USER.md，provider 事实库被冷落）",
+      "labels": "type/bug, comp/agent, comp/plugins, tool/memory, P3, needs-decision, sweeper:risk-session-state, area/memory",
+      "difficulty": "★★☆（prompt 措辞/路由权重调整，需权衡 prompt 缓存）",
+      "status": "🟡 观察 — 08-05T21:49 创建，无 assignee/评论/cross-ref。needs-decision + 动 system prompt（缓存铁律），撞车/被关风险中。按决策 B 只记录。",
+      "fix_point": "prompt_builder 的 memory 指导块 vs provider 工具 schema 描述（与 #79034 MEMORY_GUIDANCE 同族）",
+      "fix_idea": "不主动推荐。与 #79034（MEMORY_GUIDANCE 冲突）同主题族，两个 issue 一起看维护者怎么决策。",
+      "notes": "🎯 命中学习重心（memory + prompt 构建）！与 walkthrough-2（skill 内容注入走 user message 保缓存）关联。观察，若出 PR 可作教学素材。"
+    },
+    {
+      "number": 79663,
+      "title": "write_file/read_file/patch resolve paths on the local host instead of the remote SSH backend（SSH 后端下文件工具在本地解析路径）",
+      "labels": "type/bug, backend/ssh, comp/tools, tool/file, P2, needs-repro, sweeper:risk-compatibility",
+      "difficulty": "—（已撞车）",
+      "status": "🔴 已撞车 — 08-06 核查：PR #79702 (fix(tools): stop _resolve_path_for_task resolving ssh paths) 已 cross-ref。弃用。",
+      "fix_point": "tools/file_tools.py _resolve_path_for_task 的 SSH 分支",
+      "fix_idea": "弃用。教学点：路径解析的 backend 感知（本地/远端环境差异）。",
+      "notes": "tool/file 沾学习重心边，但撞车。"
+    },
+    {
+      "number": 79628,
+      "title": "use_gateway: true discards a valid direct credential when the Tool Gateway is unauthenticated",
+      "labels": "type/bug, comp/cli, comp/tools, tool/browser, tool/web, tool/tts, provider/nous, area/auth, area/config, P2, sweeper:risk-compatibility",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05T19:45 创建，无 cross-ref。认证类非核心，按规则不推荐。",
+      "fix_point": "tool gateway 凭据回退逻辑",
+      "fix_idea": "不推荐",
+      "notes": "认证/凭据机制沾边，观察修复模式。"
+    },
+    {
+      "number": 79472,
+      "title": "[Bug]: Memory fills, ignores new entries silently（memory 满后工具拒绝写入，错误 dict 只回给模型，用户在 gateway 完全看不到；初始化失败被 bare except: pass 吞掉）",
+      "labels": "type/bug, comp/agent, tool/memory, P2, sweeper:risk-session-state",
+      "difficulty": "★☆☆~★★☆（reporter 自带两处补丁：agent_init.py ~1690 日志 + memory 满错误面暴露）",
+      "status": "🔴 已撞车 — 创建 15:35Z，PR #79489 (fix(memory): log init failures and surface memory-full to user) 已 cross-ref。弃用（教学素材）。",
+      "fix_point": "agent/agent_init.py ~1690 bare except: pass（memory store init 失败静默）；memory 工具满后错误仅回模型不暴露用户",
+      "fix_idea": "弃用。PR #79489 思路：init 失败记 logger.warning + memory 满的错误面向用户显式化。",
+      "notes": "🎯 命中学习重心（memory 机制）！教学点：工具错误面的『三层可见性』（模型可见/用户可见/日志可见）+ bare except 吞异常。与 teach-7 skills-memory 关联。撞车速度：reporter 自带补丁 → 2h 内被抢。"
+    },
+    {
+      "number": 79424,
+      "title": "Iteration-budget-exhausted status message leaks to gateway chat platforms (Slack, etc.) unfiltered（迭代预算耗尽的诊断消息漏到聊天平台）",
+      "labels": "type/bug, comp/agent, comp/gateway, platform/slack, P2, sweeper:risk-message-delivery",
+      "difficulty": "★☆☆（reporter 自带根因：_TELEGRAM_NOISY_STATUS_RE 无此模式）",
+      "status": "🔴 已撞车 — 创建 14:18Z，PR #79446 (fix(gateway): filter iteration-budget-exhausted status from chat platf, RelaxJonh 自提) 已 cross-ref（评论确认）。弃用（教学素材）。",
+      "fix_point": "agent/turn_finalizer.py _emit_status('⚠️ Iteration budget exhausted...') → gateway/run.py _prepare_gateway_status_message() 的 _TELEGRAM_NOISY_STATUS_RE 无匹配模式",
+      "fix_idea": "弃用。PR #79446 思路：正则补 pattern 或加过滤分支。",
+      "notes": "🎯 命中学习重心（iteration budget，teach-12 同族）！教学点：与 teach-15（compaction 门控）同族——状态消息过滤集合的缺口。gateway 状态消息门控机制第三案例（COMPACTION_DONE → iteration budget exhausted）。"
+    },
+    {
+      "number": 79391,
+      "title": "Interrupted auto-compaction (explicit_interrupt) permanently deletes session history — no summary, no archive, hard ID gap",
+      "labels": "type/bug, comp/agent, comp/desktop, platform/windows, P1, area/compression, area/sessions, sweeper:risk-session-state",
+      "difficulty": "★★★（修复点模糊：archive_and_compact 的 abort 路径）",
+      "status": "🔴 已撞车 — 创建 13:10Z（当时无标签仍干净），现已 triage + PR #79439 (fix(compression): reset in-place signal on aborted compaction) 已 cross-ref。弃用。",
+      "fix_point": "压缩事务 abort 语义（中断时 in-place signal 未复位 → 后续状态错乱）",
+      "fix_idea": "弃用。规律再验证：P1 无标签 → triage 后立即被秒抢。",
+      "notes": "🎯 教学价值：压缩的 abort/in-place signal 机制（与 teach-15 compaction 门控同族）。之前预测『一旦被 triage 就会被秒抢』完全命中。"
+    },
+    {
+      "number": 79244,
+      "title": "Bug: cron jobs stuck in 'running' state for 15-17 minutes, 3-minute interrupt timeout never fires",
+      "labels": "type/bug, comp/cron, P1",
+      "difficulty": "★★★",
+      "status": "🔴 已撞车 — PR #79313 (fix(cron): request interrupt before pool shutdown and wait for complet) 已 cross-ref。弃用。",
+      "fix_point": "cron/scheduler.py 3 分钟硬中断机制",
+      "fix_idea": "弃用",
+      "notes": "上轮记录的观察候选，现已撞车。"
+    },
     {
       "number": 76254,
       "title": "Improve type safety: Use explicit enum for ModelOptionProvider.authenticated field（TS 重构）",
@@ -373,10 +526,10 @@
       "title": "Gateway slash menu shows zero skills when HERMES_HOME is behind a symlink（_collect_gateway_skill_entries 用 resolve() 前缀过滤，但扫描器返回未 resolve 路径 → symlink 时全部 startswith 失败）",
       "labels": "type/bug, comp/cli, comp/gateway, tool/skills, P3",
       "difficulty": "★☆☆~★★☆（路径前缀比较的 resolve 不一致，reporter 自带根因；但需确认全链路哪些路径 resolve 哪些不 resolve）",
-      "status": "🟢 仍干净 — 08-05T04:3XZ 复查：open、无 assignee/评论；timeline cross-ref 只有 #78782（telegram setMyCommands 平台类，无关）。备选池唯一干净候选。",
+      "status": "🔴 已撞车 — 08-06T09:0X 核查：PR #79748 (fix(commands): preserve symlinked skill categories in gateway menus, Cloudymap1e, +149/-29) 已 cross-ref，但 closed 未合并——AI triage 判 duplicate of #78676（08-04T17:24 创建的更早实现，open 中）。备选池最后幸存者出局。弃用（#78676 是实际修复，可作教学素材）。",
       "fix_point": "hermes_cli/commands.py::_collect_gateway_skill_entries（SKILLS_DIR.resolve() 前缀 vs 未 resolve 的扫描路径）",
       "fix_idea": "统一路径基准：要么扫描器也 resolve，要么过滤端不 resolve；或改用 Path.relative_to 容错。注意与 #75130 同根（symlink 路径解析不一致），修 #75130 的 PR 可能顺带覆盖，需持续盯。",
-      "notes": "🎯 命中学习重心（skill 加载机制）+ 与 #75130 同根（symlink 路径解析不一致）。当前是备选池唯一幸存者。按决策 B 只记录，等用户表态。"
+      "notes": "🎯 命中学习重心（skill 加载机制）+ 与 #75130 同根（symlink 路径解析不一致）。08-06T03:0X 复查：仍干净但 reporter 自带完整修复+测试+分支 → 自报自修风险高。按决策 B 只记录，等用户表态。 08-06T09:0X：撞车确认——#79748 closed（duplicate of #78676），主题实现者是 #78676（open）。与 #75130（rglob symlink）同根族的第三个案例（gateway 菜单 symlink 路径前缀过滤）。"
     },
     {
       "number": 78273,
@@ -757,6 +910,156 @@
       "fix_point": "tools/delegate_tool.py 异步委托完成事件生命周期",
       "fix_idea": "不推荐：feature + 设计决策（谁该消费、ack 语义怎么定）。与 teach-12 iteration budget 同模块（delegation），可作背景知识。",
       "notes": "delegation 机制沾学习重心边。观察，不主动推荐。"
+    },
+    {
+      "number": 79156,
+      "title": "fix(agent): per-turn env credential refresh leaves stale pool entry id — healthy fallback key quarantined on next 429（env 凭据按轮次刷新后 _credential_pool_entry_id 未重绑，下一次 429 错怪健康条目）",
+      "labels": "type/bug, comp/agent, area/auth, P2",
+      "difficulty": "★★☆（credential pool 状态同步，reporter 自带根因）",
+      "status": "🔴 已撞车 — 双 PR 竞争：#79180 + #79224 (fix(agent): rebind credential pool entry id) 均 open。弃用。",
+      "fix_point": "agent 凭据池轮转：2d70f56327 提交后 per-turn 刷新把 agent.api_key 改回 env 值但不重绑 agent._credential_pool_entry_id",
+      "fix_idea": "弃用（双 PR 已在做）。教学点：配置态与运行时态脱节（同 #78382 型：rotation 换 client 不换 provider 标签）。",
+      "notes": "与 teach-12 iteration-budget 同模块（credential pool）。撞车速度：07:00 创建即带 fix(agent) 前缀（作者自己写了修复标题），双 PR 竞争说明是热门区。"
+    },
+    {
+      "number": 79178,
+      "title": "[Bug]: surrogateescape content fails in the real LocalEnvironment write path（write_file 声称支持 surrogateescape 字节，但真实 stdin 路径仍严格 UTF-8 编码，且 surrogatepass hash 不是 escape 解码的逆运算）",
+      "labels": "type/bug, comp/tools, tool/file, P2",
+      "difficulty": "★★☆（编码路径 + hash 逆运算，reporter 自带复现）",
+      "status": "🔴 已撞车 — 三连撞：#79218 (closed) / #79234 (closed) / #79240 (open, surrogateescape-safe file writes) 同主题多 PR。弃用。",
+      "fix_point": "tools/environments LocalEnvironment stdin 写路径（严格 UTF-8 encode）+ 新 hash 计算与 surrogateescape 不互逆",
+      "fix_idea": "弃用。教学点：字节安全（surrogateescape）在真实 I/O 路径 vs mock 测试路径的分裂——reporter 特意强调『real LocalEnvironment, not mocked helper』，这正是 AGENTS.md『E2E validation, not just green unit mocks』铁律的实战案例。",
+      "notes": "tool/file 沾学习重心边。三 PR 同主题说明修复有多个方案在竞争（closed 两个说明被 superseded）。"
+    },
+    {
+      "number": 79187,
+      "title": "write_file/patch permission failures surface the internal .hermes-tmp path instead of the target and offer no remedy（EACCES 时错误信息暴露原子写临时路径，看起来像内部 bug，无补救提示）",
+      "labels": "type/bug, comp/tools, tool/file, P2",
+      "difficulty": "★☆☆（错误信息包装，reporter 自带方案：区分 EACCES 与策略拒绝 #69962）",
+      "status": "🔴 已撞车 — PR #79188 (fix(tools): explain permission-denied writes instead of leaking temp path) open，reporter 自提自修（07:52 创建，PR 紧随）。弃用。",
+      "fix_point": "write_file/patch 的原子写异常处理（EACCES → 显示目标路径 + chmod/权限提示）",
+      "fix_idea": "弃用。教学点：错误信息是 UX 的一部分——内部临时路径泄漏让用户误以为是 Hermes 自己的 bug。与 #79178 同族（file 工具的错误路径卫生）。",
+      "notes": "非核心但教学价值中（工具错误面设计）。"
+    },
+    {
+      "number": 79270,
+      "title": "[Bug] skills.external_dirs JSON-looking scalar is silently skipped（hermes config set 把 JSON 数组字符串存成 YAML 标量，外部 skill 加载器当 1 个目录静默跳过）",
+      "labels": "无标签（未 triage）",
+      "difficulty": "★☆☆（根因已本地验证，修复点精确到两行）",
+      "status": "🔴 已撞车 — PR #79264 (fix(skills): validate external directory config) open 已 cross-ref（10:04 创建，PR 几乎同时）。弃用（作教学素材）。",
+      "fix_point": "写入端 hermes_cli/config.py:8547-8556（_default_value_for_key 是 list 时，JSON 数组字符串未解析为 list，保持原字符串落盘）；读取端 agent/skill_utils.py:476-477（isinstance(raw_dirs, str) 包成单元素 [raw_dirs]，不尝试解析 JSON）",
+      "fix_idea": "弃用（PR 已出）。方案A（写入端）：config set 时若 default 是 list 且 value 是 JSON 数组 → 解析为 list；方案B（读取端）：skill_utils 遇 str 先尝试 json.loads；方案C：config set 对 list 类型 key 明确提示用多次 set 或 YAML 格式。",
+      "notes": "🎯 命中学习重心（skill 加载机制）！08-05T18:0X 本地完整复现验证：set_config_value('skills.external_dirs', json.dumps([p1,p2])) → config.yaml 落盘为 external_dirs: '[\"...\",\"...\"]' 标量 → get_external_skills_dirs() 返回 []（0 条，静默）；对照手写 YAML 序列则正常返回 2 条。根因链：coercion 只处理 bool/int/float，JSON 字符串原样落盘 → skill_utils 476-477 把整个字符串当一个目录 → expandvars 后路径不存在 → 静默跳过。与 walkthrough-1/2（skill 加载链路）直接关联。可作 teach-18 素材（配置写入端/读取端的类型契约 + 静默失败）。"
+    },
+    {
+      "number": 79244,
+      "title": "Bug: cron jobs stuck in 'running' state for 15-17 minutes, 3-minute interrupt timeout never fires（v0.19.1 三个 cron 任务卡 running，3 分钟 interrupt 机制未触发，重启 gateway 才恢复）",
+      "labels": "type/bug, comp/cron, P1",
+      "difficulty": "★★★（修复点模糊：需查 cron scheduler 的 interrupt 为何未触发；本地需复现 gateway 场景）",
+      "status": "🔴 已撞车（修正重复条目）— 08-06 核查：timeline 确认 PR #79313 (fix(cron): request interrupt before pool shutdown and wait for completion, Baophan00) 已 cross-ref，open 状态。此前条目写『🟢 干净』有误，以此为准。弃用。",
+      "fix_point": "cron/scheduler.py 3 分钟硬中断机制（会话未按预期被 interrupt；executions.db 记录 dur=892s/1032s 远超 180s）",
+      "fix_idea": "弃用。PR #79313 思路：pool shutdown 前先 request interrupt 并等待完成。",
+      "notes": "comp/cron 沾学习重心边（teach-5 讲过 cron 调度器）。与顶部 #79244 条目（08-05 已记撞车）为同一 issue 的重复记录，本条为底部旧记录，已修正为撞车状态。"
+    },
+    {
+      "number": 79350,
+      "title": "stale [memory] final replies survive marker repair and keep poisoning resumed sessions（#78148 修复只覆盖第一种 shape：marker+tool_calls；裸 marker final reply 无 tool_calls 的两条修复路径都漏）",
+      "labels": "type/bug, comp/agent, P2, sweeper:risk-session-state, area/sessions",
+      "difficulty": "★★☆（reporter 自带精确根因：hermes_state.py _is_stale_tool_call_marker_message 对 tool_calls falsy 返回 False + purge_stale_tool_call_markers SQL 只扫 tool_calls IS NOT NULL）",
+      "status": "🔴 已撞车 — 08-05T12:25 创建，PR #79351 (fix(state): repair bare-marker final replies) 已 cross-ref。弃用（teach-13 message-repair follow-up 教学素材）。",
+      "fix_point": "hermes_state.py：_is_stale_tool_call_marker_message（tool_calls falsy 分支）+ purge_stale_tool_call_markers 的 SQL 条件（加 role='assistant' AND content 匹配裸 marker 且无 tool_calls 的行）",
+      "fix_idea": "弃用。PR #79351 思路：识别『同一会话中前面有 marker+tool_calls 回合、后面跟着裸 marker 无 tool_calls 的 final reply』两种 shape 都修；genuine reply 不受影响（fullmatch 匹配）。",
+      "notes": "🎯 命中学习重心（message-repair 机制）！#78148 修复（teach-13 已写）只堵了半条污染路径的姊妹篇。教学点：『修复只匹配问题的一种 shape』的经典缺口。撞车速度：reporter 自带根因 → 立即被抢。"
+    },
+    {
+      "number": 79339,
+      "title": "Memory provider sync_turn is never called in 0.20 — external memory backends silently stop receiving completed turns",
+      "labels": "type/bug, comp/agent, tool/memory, P3, sweeper:risk-session-state, area/memory",
+      "difficulty": "★☆☆（表面）→ 实际：premise 不成立",
+      "status": "🟢 已证伪（假 bug）— 08-05T21:1X 本地验证：_sync_external_memory_for_turn 在 agent/turn_finalizer.py:707（commit 6611d87003, 2026-07-19 引入）和 agent/codex_runtime.py:790 均有调用；conversation_loop.py:7316 return finalize_turn(...) 收尾路径会走到。reporter grep 范围（run_agent.py/conversation_loop.py/memory_manager.py/hermes_cli/）恰好遗漏 turn_finalizer.py 和 codex_runtime.py → 误报零调用点。",
+      "fix_point": "无（无需修）。若有人按 reporter 建议在 run_agent forwarder 加调用，会造成 sync 双调用。",
+      "fix_idea": "无需修。若 upstream 有人按 issue 修，风险是重复 sync（finalize_turn 已调一次）——注意观察是否有错误修复。",
+      "notes": "🎯 教学产出候选：teach-16（premise verification）姊妹案例——grep 范围遗漏导致的假 bug。验证方法：git blame turn_finalizer.py:707 看引入时间（07-19 早于 issue 08-05）；对照 upstream main 调用链（conversation_loop→finalize_turn→sync）。与 #78273（版本过期证伪）不同：这次是『搜索范围不全』型证伪。"
+    },
+    {
+      "number": 79357,
+      "title": "idle_compact_after_seconds never fires in gateway mode — watchdog reset clobbers _last_activity_ts before the idle check reads it（两个特性共享一个 timestamp）",
+      "labels": "type/bug, comp/agent, comp/gateway, P2, sweeper:risk-session-state, area/compression",
+      "difficulty": "★★☆（reporter 自带根因：GatewayRunner._init_cached_agent_for_turn 每轮重置 _last_activity_ts 供 inactivity watchdog 用，idle compaction 读同一个 ts → gap 恒为 ~0）",
+      "status": "🔴 已撞车 — 08-05T12:38 创建，PR #79372 (fix(gateway): preserve idle compaction gap on cached turns) 已 cross-ref。弃用（教学素材）。",
+      "fix_point": "agent/turn_context.py idle 检查（_idle_gap = time.time() - agent._last_activity_ts）与 gateway/run.py _init_cached_agent_for_turn 的重置（#9051 引入，防 29 分钟空闲误触 watchdog）",
+      "fix_idea": "弃用。PR #79372 思路：保留 idle compaction 需要的真实空闲 gap。教学点：『两个特性共享一个状态变量』的经典耦合 bug（watchdog 要『本轮内活跃度』，idle compaction 要『跨轮真实空闲』，语义不同却共用 _last_activity_ts）。",
+      "notes": "🎯 命中学习重心（compaction 机制，teach-15 同族）！教学价值：timestamp 语义冲突 + #9051 的『修复引入新 bug』循环。"
+    },
+    {
+      "number": 79391,
+      "title": "Interrupted auto-compaction (explicit_interrupt) permanently deletes session history — no summary, no archive, hard ID gap（压缩中断永久删历史）",
+      "labels": "（无标签，未 triage）",
+      "difficulty": "★★★（修复点模糊：需深读 archive_and_compact 的 abort 路径；本地难复现：需 500K token 会话 + 流式中断）",
+      "status": "🟢 仍干净 — 08-05T21:1X 核查：13:10 创建，无 assignee/评论/cross-ref。严重 bug（会话历史永久丢失）但无标签 + 修复点模糊。",
+      "fix_point": "压缩事务的 abort 语义（archive_and_compact 中断时历史行未归档也未保留，active=1 行消失 + 硬 ID gap）",
+      "fix_idea": "不主动推荐（修复点模糊 + 需端到端大会话复现）。教学价值：压缩的『提交/回滚』事务语义。观察。",
+      "notes": "P1 级严重度但无标签——按历史规律一旦被 triage 就会被秒抢。持续盯。"
+    },
+    {
+      "number": 79343,
+      "title": "memory gate treats mid-task workflow commands as trivial and skips provider recall（TRIVIAL_PROMPT_RE 把 continue/next/do it/proceed/done/lgtm 当 trivial，跳过 memory prefetch）",
+      "labels": "type/bug, comp/agent, comp/plugins, tool/memory, P3, area/memory",
+      "difficulty": "★☆☆（改 TRIVIAL_PROMPT_RE alternation + 测试；但分类策略调整有 needs-decision 风险）",
+      "status": "🔴 已撞车 — 08-05T12:16 创建，PR #79347 (fix(memory): stop skipping provider recall on mid-task workflow) 已 cross-ref。弃用（教学素材）。",
+      "fix_point": "agent/memory_provider.py TRIVIAL_PROMPT_RE（continue|go ahead|do it|proceed|done|next|lgtm 属于工作流命令不应跳过）+ Honcho _is_trivial_prompt 别名",
+      "fix_idea": "弃用。PR #79347 思路：去掉工作流命令，只留纯问候/确认。教学点：『共享正则的过度匹配』——一层分类逻辑同时影响 core prefetch gate 和所有 provider（Honcho 别名）。",
+      "notes": "🎯 命中学习重心（memory 机制）！与 teach-7 skills-memory 关联。"
+    },
+    {
+      "number": 79569,
+      "title": "[Bug]: _begin_in_order start gate waits without timeout — batch starvation, false timeout attribution, leaked workers（并发批次开始顺序门无超时：gate-holder 卡在 dispatch/授权 → 后面工具全部饥饿；deadline 到点把从未开始的工具误报 timed out；abandon 后 parked 线程永久泄漏）",
+      "labels": "type/bug, comp/agent, P1",
+      "difficulty": "★★☆（reporter 自带完整根因+faulthandler 现场+已在生产验证的修复）",
+      "status": "🔴 已撞车 — 创建 17:58Z，PR #79571 (fix(agent): bound the concurrent start-order gate wait) 已 cross-ref（约 1 小时内）。弃用（教学素材 teach-19 已写）。",
+      "fix_point": "agent/tool_executor.py:806-815 _begin_in_order（wait_for 无超时）；gate-holder 卡点：_authorized_dispatch→middleware→_advance_start；批次 deadline 995 行管不到 gate；shutdown(wait=False) 1161 行泄漏 parked 线程",
+      "fix_idea": "弃用。PR #79571 思路：gate wait 加超时边界 + 区分 never-started(gate-starved) vs started-and-overran 归因 + abandon 时唤醒 parked worker。",
+      "notes": "🎯 命中学习重心（工具调度，agent 核心）！教学产出 teach-19 已写（本地无门 vs upstream 有门对照 + 无超时等待三宗罪：饥饿/误归因/泄漏）。P1+reporter 自带方案=秒抢规律第 N 次验证。姊妹 issue #79568（顺序路径无 deadline）。"
+    },
+    {
+      "number": 79568,
+      "title": "[Bug]: Sequential tool execution has no deadline — a wedged tool silently stalls the whole turn（顺序执行路径无 deadline，卡住的工具静默拖死整轮）",
+      "labels": "type/bug, comp/agent, P1",
+      "difficulty": "★★☆（与 #79569 同一事故的姊妹篇，顺序路径无批次 deadline）",
+      "status": "🔴 已撞车/弃用 — 与 #79569 同场事故，reporter 拆开报。关联 PR 状态以 #79571 为准。",
+      "fix_point": "agent/tool_executor.py:1421 execute_tool_calls_sequential（无 deadline/心跳）",
+      "fix_idea": "弃用。教学素材（与 teach-19 同族：所有'等待'都要上边界）。",
+      "notes": "与 teach-19 一起消化：并发门无超时 + 顺序路径无 deadline = 同一设计盲区（'检查超时'与'被检查对象'不在同一条路径）。"
+    },
+    {
+      "number": 79602,
+      "title": "[Feature]: let ProviderProfile declare prompt-cache policy（model-provider 插件无法声明自己的 cache_control 支持/布局，插件 provider 只能靠核心加 allowlist）",
+      "labels": "type/feature, comp/agent, comp/plugins, P3, sweeper:risk-caching",
+      "difficulty": "★★★（feature + 动 prompt cache 策略解析链，AGENTS.md 缓存铁律相关）",
+      "status": "🟡 观察 — 08-05T18:48 创建，无 assignee/评论/cross-ref。feature 类 + 核心缓存机制，撞车/被关风险高。",
+      "fix_point": "anthropic_prompt_cache_policy() 内置规则 → ProviderProfile 可选 hook（None=回落内置 / (enabled, native_layout)），在 operator cache-disable 与 MoA 解析之后、内置 fallback 之前解析",
+      "fix_idea": "不主动推荐（feature + 设计决策 + 需要理解缓存策略解析链）。教学价值：prompt cache policy 的解析优先级链（operator 显式禁用 > MoA > provider hook > 内置规则）。",
+      "notes": "与 AGENTS.md『prompt 缓存神圣』直接相关——缓存策略是 provider 能力声明（capability at edges），方向符合插件化哲学，但实现涉及核心策略链。观察。"
+    },
+    {
+      "number": 79608,
+      "title": "kanban.auto_promote_children=false is defeated by the dispatcher（kanban 配置被 dispatcher 无视）",
+      "labels": "type/bug, comp/cron, area/config, P3",
+      "difficulty": "—",
+      "status": "🟡 记录 — kanban 类，按用户规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05T18:53 创建。"
+    },
+    {
+      "number": 79572,
+      "title": "Terminal tool: lifecycle guard crashes with ValueError (embedded null byte)（duplicate）",
+      "labels": "type/bug, duplicate, comp/cron, tool/terminal",
+      "difficulty": "—",
+      "status": "🟡 记录 — duplicate（#78256/#78244 同族），非 agent 核心，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05T18:00 创建，1 评论。"
     }
   ],
   "awaiting_answer": false,
@@ -776,6 +1079,6 @@
     "state_file": "/root/projects/hermes-agent-plus/001study/walkthrough-3-cli-core-loop.md",
     "rule": "每天最多产 1 份；用户读完/反馈卡点后才推进下一份；篇幅控制 6000 字内；代码片段 ≤30 行；**每一处引用的代码必须标注 文件:行号（如 agent/skill_utils.py:123），调用路径图每步也带行号，方便用户对照源码自己读**"
   },
-  "last_tick_time": "2026-08-05T15:0X:00+08:00",
-  "notes": "2026-08-05 tick 32（15:0X，白天）：① 走读卡纪律：用户对 walkthrough-3/3.1 仍无反馈（会话历史最新消息是 repo-monitor 修 prompt，与走读卡无关）→ 今天不再产卡，等用户回复思考题。② 新池扫描（08-05T04:00Z 后 99 条，核心相关 5 条）：#79100 length-continuation 计数器不归零（🎯 核心循环，1.2h 被 PR #79153 秒抢，根因本地验证：5083 行注释写 counters 复数只 reset 一个→已写 teach-17）、#79121 vision callable api_key（PR #79150 秒抢）、#79101 api_server 虚拟 model 别名（PR #79102 自报自修）、#79072 intent-driven context assembly（feature，与 prompt 缓存铁律冲突，观察+教学素材）、#79080 delegation collect/ack（feature，观察）。③ 复查：#78144 仍干净（备选池唯一幸存者，updated 停 08-04T03:27Z）；#75130/#78900/#79034/#79035/#79047 均无变化。④ 产出：teach-17-length-continuation-counter.md（计数器生命周期不对称教学，含动手实验与 3 道思考题）。⑤ 下轮（18:00）：等用户对走读卡 3/3.1 反馈；无反馈则继续攒 issue 状态。候选池规律再验证：reporter 自带根因+引用 commit 的 issue 平均 1-1.5h 被抢，feature+needs-decision 无人抢（#79072/#79080 存活）。"
+  "last_tick_time": "2026-08-06T09:0X:00+08:00",
+  "notes": "2026-08-06 tick 38（09:0X）：① #79623 撞车确认——PR #79766 (thatssoheil, open, +80/-2) 用 cron 分支读 _SESSION_CWD contextvar 实现，与本地方案A方向完全一致（方案验证成功！），附 5 测试；issue-12 报告需加撞车注记。② #78144 出局——PR #79748 closed（duplicate of #78676，08-04 更早实现 open）。③ 新池扫描 6 条：#79788（fallback anthropic URL 重写）🟢 干净候选且已本地验证根因链（auxiliary_client.py:4912 无条件 _to_openai_base_url + fallback 路径不读显式 api_mode chat_completion_helpers.py:1632-1639 + 重写先于推断 1671-1682）；#79797 10 分钟被 PR #79808 秒抢；其余 desktop/slack/CI 不推荐。④ 走读卡：用户未反馈 walkthrough-3.1，不产新卡。"
 }

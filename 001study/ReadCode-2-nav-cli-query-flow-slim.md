@@ -39,8 +39,7 @@ LLM API 调用
 # cli.py:15674
 if query or image:      # ← 单次查询模式入口
     cli.agent.run_conversation()
-else:
-    cli.run()           # ← 交互模式（12749）
+cli.run()           # ← 交互模式（12749）
 ```
 
 ---

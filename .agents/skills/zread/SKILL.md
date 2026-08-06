@@ -1,5 +1,5 @@
 ---
-name: record-method
+name: zread
 description: "快速判断并记录一个方法是否是核心方法，存到 CSV"
 version: 1.0.0
 author: Hermes Agent
@@ -23,7 +23,7 @@ metadata:
 - 文件路径（如 `cli.py`、`hermes_cli/cli_agent_setup_mixin.py`）
 - 行号或方法名
 
-**自动执行**：Claude 会调用 `record_method.py` 脚本自动分析并写入 CSV。
+**手动追加**：分析后手动编辑 CSV 文件。
 
 ## 自动分析规则
 
@@ -79,15 +79,21 @@ grep -n "method_name(" *.py
 | 调用频率 | 高 | 低 |
 | 守卫语句 | 无 | 有 |
 
-## 输出
+## 追加输出
 
 CSV 文件: `001study/method_core_map.csv`
 
 格式:
 ```
-file,line,class,method,is_core,reason
+
 cli.py,353,,AIAgent,YES,方法名含 run/execute/do
 ```
+
+表头: file,line,class,method,is_core,reason
+
+先检查该条是否存在，如果已经存在，取出已经记录的结果作为参考，并且可以结合当前上下文再次判断一次，也要避免重复记录，如果意见不一样，告知用户。
+
+如果是第一次，增加表头并记录，否则不带表头，输出到文件末尾。
 
 ## 示例
 
@@ -95,6 +101,6 @@ cli.py,353,,AIAgent,YES,方法名含 run/execute/do
 # 记录 _init_agent
 你: 帮我记录 hermes_cli/cli_agent_setup_mixin.py 第 226 行的方法
 
-Claude: 已记录: _init_agent = 边缘方法
+Claude: 已记录: _init_agent = 核心方法
 原因: 方法名含 ensure/check/init (边缘)
 ```
