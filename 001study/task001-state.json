@@ -2,8 +2,8 @@
   "task_id": "001",
   "name": "Hermes Agent 源码探索 + 好做的 Issue 猎手",
   "status": "running",
-  "tick_count": 4,
-  "phase": "deep_dive_gateway",
+  "tick_count": 32,
+  "phase": "issue_scanning",
   "phase_order": [
     "architecture_overview",
     "deep_dive_agent",
@@ -14,14 +14,15 @@
     "deep_dive_skills_memory",
     "issue_scanning"
   ],
-  "current_module": "deep_dive_gateway",
+  "current_module": "issue_scanning（用户决策B 08-04：已撞车但教学价值高的 PR 当教材 → #77538/#77549 写 teach-14/15）",
   "modules_explored": [
-    "architecture_overview", 
-    "deep_dive_agent", 
-    "deep_dive_tools", 
-    "deep_dive_plugins", 
-    "deep_dive_cron_scheduler", 
-    "deep_dive_gateway"
+    "architecture_overview",
+    "deep_dive_agent",
+    "deep_dive_tools",
+    "deep_dive_plugins",
+    "deep_dive_cron_scheduler",
+    "deep_dive_gateway",
+    "deep_dive_skills_memory"
   ],
   "reports_generated": [
     "report-1-architecture_overview.md",
@@ -29,24 +30,752 @@
     "teach-3-tool-system.md",
     "teach-4-plugin-system.md",
     "teach-5-cron-scheduler.md",
-    "teach-6-gateway.md"
+    "teach-6-gateway.md",
+    "teach-7-skills-memory.md",
+    "issue-8-75130-symlink-skills.md",
+    "issue-9-75461-interrupt-log-secrets.md",
+    "issue-10-76255-openai-api-reasoning-effort.md",
+    "issue-11-76196-kanban-archive-guard.md",
+    "teach-12-iteration-budget.md",
+    "teach-13-message-repair.md",
+    "teach-14-context-engine-lifecycle.md",
+    "teach-15-compaction-progress-gate.md",
+    "teach-16-issue-premise-verification.md",
+    "teach-17-length-continuation-counter.md"
   ],
-  "issues_identified": [],
+  "issues_identified": [
+    {
+      "number": 76254,
+      "title": "Improve type safety: Use explicit enum for ModelOptionProvider.authenticated field（TS 重构）",
+      "labels": "（未 triage，无标签）",
+      "difficulty": "★☆☆ 简单（TS 机械重构，desktop 前端）",
+      "status": "🔴 已撞车 — 08-02T03:02Z 核查：PR #76315 (webtecnica, open) 已引用。弃用",
+      "fix_point": "apps/desktop ModelOptionProvider.authenticated: boolean|undefined → 显式 enum",
+      "fix_idea": "定义 AuthState enum（UNAUTHENTICATED/AUTHENTICATED/UNKNOWN），替换全代码库条件判断；vitest 覆盖",
+      "notes": "备选 3 号"
+    },
+    {
+      "number": 76243,
+      "title": "Buzz Desktop managed Hermes agent wakes but cannot reply because BUZZ_PRIVATE_KEY is stripped",
+      "labels": "type/bug, comp/acp, comp/plugins, tool/terminal, area/config, P3, sweeper:risk-security-boundary, sweeper:risk-compatibility",
+      "difficulty": "★★☆ 修复点需进一步定位（macOS 专有，本地无法复现）",
+      "status": "🔴 已撞车 — 08-02T06:05Z 核查：PR #76379 (fix(buzz): propagate private key to agent, 08-01T19:57Z cross-ref)。与 #76378 相隔仅 5 分钟——webtecnica 同一人收割。弃用。",
+      "fix_point": "env 传递链（BUZZ_PRIVATE_KEY 被 strip）— 需读 ACP/terminal scope 代码定位",
+      "fix_idea": "待定位",
+      "notes": "备选 4 号"
+    },
+    {
+      "number": 74989,
+      "title": "MATTERMOST_REPLY_MODE 静默忽略（无效值当 off 处理）",
+      "labels": "type/bug, comp/plugins, area/config, P3",
+      "difficulty": "★☆☆ 最简单",
+      "status": "已撞车 — 已有 PR #72374 (open, mergeable=blocked, 1 review comment)",
+      "fix_point": "plugins/platforms/mattermost/adapter.py:102-104 构造时无校验；175/878 行相等性测试",
+      "fix_idea": "构造时校验值 ∈ {thread, off}，非法值记 warning 并回退 off；strip 空白"
+    },
+    {
+      "number": 75087,
+      "title": "hermes model picker 把 display-name slug 存进 model.provider",
+      "labels": "type/bug, comp/cli, area/config, P2, sweeper:risk-compatibility",
+      "difficulty": "★★☆ 中等",
+      "status": "已撞车 — 已有 PR #75129 (open, 2026-07-31 提交)",
+      "fix_point": "hermes_cli/main.py:2972 key = \"custom:\" + name.lower().replace(\" \", \"-\")",
+      "fix_idea": "改用 providers 字典的真实 config key 生成 picker key；对存量已存的 slug 加兼容解析"
+    },
+    {
+      "number": 75025,
+      "title": "web_search(ddgs) 在 Docker sealed-venv 里 worker 子进程丢 lazy-install PYTHONPATH",
+      "labels": "type/bug, comp/plugins, tool/web, area/docker, P3",
+      "difficulty": "★★☆ 中等",
+      "status": "已撞车 — 已有 PR #75038 (open)",
+      "fix_point": "plugins/web/ddgs/provider.py 的 _search_worker 子进程",
+      "fix_idea": "worker 启动前把 HERMES_LAZY_INSTALL_TARGET 加进子进程 PYTHONPATH 或复用 activate_durable_lazy_target()"
+    },
+    {
+      "number": 75130,
+      "title": "Pending skill-proposal queue grows unbounded and self-invalidates （skill 提案队列无界增长；rglob 不穿 symlink 是根因之一）",
+      "labels": "type/bug, comp/agent, tool/skills, area/config, P2, sweeper:risk-compatibility",
+      "difficulty": "★☆☆ 修复简单（统一到 iter_skill_index_files），影响面已实测",
+      "status": "🟡 用户保留关注 — 08-05T04:3XZ 复查：仍 open，5 评论，updated 停在 08-03T10:53Z。官方主题修正：issue 标题是『提案队列无界增长+自失效』，symlink 只是根因链一环。4 个 cross-ref PR（#75225 symlink 遍历 / #76249 提案上限 / #76294 防陈旧回放 / #67748 symlink follow）全挂着未合。",
+      "fix_point": "tools/skill_manager_tool.py:617 (_find_skill) 与 :681 (_find_skill_in_other_profiles) 的 skills_dir.rglob(\"SKILL.md\")；skills_tool.py:1176 的 search_dir.rglob(f\"{name}.md\") 为次要点",
+      "fix_idea": "rglob 不穿透目录 symlink → 换成 agent/skill_utils.py:797 已有的 iter_skill_index_files()（os.walk(followlinks=True) + 排除逻辑），与 skills_tool/skill_commands/prompt_builder 保持一致；顺带修复 skill_manager_tool 缺失的排除目录过滤",
+      "notes": "用户保留关注：skill 加载教学活例子。标题理解修正——不只是 rglob 看不到 symlink，是『提案队列无界增长+自失效』，PR 分头修不同侧面（symlink/上限/回放）都未合，维护者可能在做统一设计。持续跟踪。"
+    },
+    {
+      "number": 75399,
+      "title": "Cron CLI/tool cannot show a job's full prompt before editing",
+      "labels": "duplicate, type/feature, comp/cli, comp/tools, comp/cron, P3",
+      "difficulty": "★☆☆ 简单",
+      "status": "已撞车 — 2026-07-31T12:15 被 AI triage 标 duplicate（#18374），已有 PR #32772/#43031",
+      "fix_point": "cron CLI show 命令",
+      "fix_idea": "弃用"
+    },
+    {
+      "number": 75403,
+      "title": "[Bug] disk-cleanup deletes persistent test files based only on their filename",
+      "labels": "type/bug, comp/plugins, P3, sweeper:risk-session-state",
+      "difficulty": "★★☆ 中等",
+      "status": "已撞车 — AI triage 列出 PR #75424 (best fix, +23/-0) 和 #75464",
+      "fix_point": "disk-cleanup 插件 basename 匹配逻辑",
+      "fix_idea": "弃用"
+    },
+    {
+      "number": 75416,
+      "title": "Telegram gateway: DNS resolution failure for api.telegram.org not recovered cleanly",
+      "labels": "type/bug, comp/plugins, platform/telegram, P3",
+      "difficulty": "★★☆~★★★ 修复点模糊（adapter 重连状态机）",
+      "status": "🟡 仍干净 — 08-03T12:05Z 复查未做（配额优先给新候选），保持上次结论：修复点模糊，吸引力低。仅记录。",
+      "fix_point": "telegram adapter 重连逻辑；telegram_network.py 已有 fallback transport，问题在更高层",
+      "fix_idea": "需先读 adapter 重连状态机才能定方案；本地难端到端测试。备选。"
+    },
+    {
+      "number": 77211,
+      "title": "`hermes update` 在 checkout 已最新时跳过 Node 依赖刷新——之前失败的 npm install 永远修不好（报错却提示 re-run hermes update）",
+      "labels": "type/bug, comp/cli, P2, sweeper:risk-compatibility, area/install-update",
+      "difficulty": "★★☆ 中等（镜像 _venv_core_imports_healthy 模式，1 函数 + 调用点 + 测试）",
+      "status": "🔴 已撞车 — 08-03T12:05Z 复查：PR #77231 (open, fix(update): check Node.js deps health on already-current ch) 已引用，AI triage 评论也指向它。方案与本地设想（_node_modules_healthy）一致。弃用。",
+      "fix_point": "hermes_cli/main.py:10064-10113（apply 路径 current-checkout 分支；8842/8860 是 check 路径不涉及）",
+      "fix_idea": "新增 _node_modules_healthy() → 不健康时 _write_update_incomplete_marker() + _update_node_dependencies() + _do_build_web_ui() + _clear_update_incomplete_marker()，成功打印 '✓ Node dependencies repaired!'；测试参考现有 _venv_core_imports_healthy 测试",
+      "notes": "撞车速度验证：创建 08-03T01:15Z，PR #77231 当天出现。候选质量判断（修复点明确+有镜像模式）正确，只是来不及。"
+    },
+    {
+      "number": 77173,
+      "title": "Gateway terminal guard 对全路径二进制误报（lifecycle_guard._read_referenced_script 三个 bug：JS 注释被当路径→/ 根目录被判 unsafe；ELF 二进制超 1MB 扫描预算；p?kill\\b 正则漏 killa 变体）",
+      "labels": "type/bug, comp/cron, tool/terminal, P2, needs-decision, sweeper:risk-security-boundary",
+      "difficulty": "★★☆ 中等（reporter 自带完整修复方案，3 处小改 + 测试）",
+      "status": "🔴 已撞车 — 08-03T18:20Z 复查：3 个 cross-ref PR（#77358/#77383/#77536），其中 #77536 'fix(guard): lifecycle guard false-positive on full paths' 正是本 issue 主题。弃用。",
+      "fix_point": "cron/lifecycle_guard.py _read_referenced_script()",
+      "fix_idea": "Bug1: stat.S_ISDIR 判断目录返回 (None, False)；Bug2: 读文件头检测 ELF/Mach-O/PE magic 跳过扫描；Bug3: 正则改 p?kill[a-z]*\\b。reporter 方案可能已在其本地写好，认领速度快",
+      "notes": "08-03T18:20Z 最终确认撞车。此前判断（reporter 亲自跟进→很快提 PR）完全命中。"
+    },
+    {
+      "number": 77178,
+      "title": "terminal: process_subreaper 等 sccache 守护进程子孙永久挂起——主命令完成后 managed terminal 仍 running 数分钟",
+      "labels": "type/bug, tool/terminal, P2",
+      "difficulty": "★★★ 修复点模糊（需设计有界后代策略区分主命令与故意常驻 daemon）+ 本地难复现（需 sccache + Rust gate）",
+      "status": "🟢 干净 — 08-03T00:19Z 创建。双重核查（09:30 CST）：无 assignee/评论/cross-ref。",
+      "fix_point": "process_subreaper 后代回收策略（待定位具体文件）",
+      "fix_idea": "设计 bounded descendant-containment policy：区分完成的主命令与故意常驻 daemon，同时报告/对账泄漏的 task 进程。方案需先读 process_subreaper.py 才能定",
+      "notes": "吸引力低（修复点模糊 + 本地难端到端验证）。仅记录。"
+    },
+    {
+      "number": 77305,
+      "title": "fix(delegation): failed API calls consume the subagent iteration budget, starving the fallback chain（API 调用失败也扣迭代预算，fallback 链被饿死）",
+      "labels": "（无标签）",
+      "difficulty": "★★☆ 中等（修复点明确，方案需权衡安全阀 vs 公平性）",
+      "status": "🔴 用户③不感兴趣（2026-08-03），不再推荐",
+      "fix_point": "agent/conversation_loop.py:727/736（失败路径不 refund）；iteration_budget.py:45 refund() 已有先例（execute_code）",
+      "fix_idea": "方案A：RetryableAPIError 时 refund()（改动最小）；方案B：fallback/重试不计入回合预算、单独 cap 恢复次数（最稳健）；验收测试：主 provider 全 429 + 备用 provider 健康 → 子代理须完成任务而非死于 max_iterations",
+      "notes": "✅ 曾推荐！直接命中用户学习重心（agent 核心循环/预算机制/fallback 链），教学产出 teach-12-iteration-budget.md 已写。用户决策⑥选择③不感兴趣。"
+    },
+    {
+      "number": 77256,
+      "title": "[Bug]: try_activate_fallback misses api.kimi.com/coding anthropic_messages endpoint（fallback 检测漏掉 Kimi coding 的 anthropic_messages 模式）",
+      "labels": "type/bug, comp/agent, provider/kimi, P2",
+      "difficulty": "★☆☆~★★☆",
+      "status": "🔴 已撞车 — 08-03T12:10Z 核查：PR #77304 (RelaxJonh 自提) + PR #77308 两个 PR 同时引用。弃用。",
+      "fix_point": "try_activate_fallback 的 fb_api_mode 推导启发式",
+      "fix_idea": "弃用",
+      "notes": "撞车速度验证 2：issue 创建 03:45Z，PR 当天即出，还出俩。"
+    },
+    {
+      "number": 77284,
+      "title": "custom_providers: add bearer_auth option for Anthropic-compatible endpoints",
+      "labels": "type/feature, comp/agent, provider/anthropic, area/auth, area/config, P3, needs-decision",
+      "difficulty": "★★☆（feature + needs-decision，方向未定）",
+      "status": "🔴 已撞车 — 08-04T06:02CST 复查：PR #77664 'feat(custom-providers): add bearer_auth option' 已 cross-ref。备选池最后成员出局。",
+      "fix_point": "custom_providers 配置解析（provider 认证机制）",
+      "fix_idea": "待读代码定位；needs-decision 意味着维护者未定方向，撞车/被关风险高",
+      "notes": "needs-decision feature 也挡不住收割——'15h 无人碰'只是假象，最终仍被 PR #77664 拿下。备选池清空。"
+    },
+    {
+      "number": 77264,
+      "title": "[Feature]: Curator consolidation should include archived skills — auto-review of archived skills before pruning",
+      "labels": "type/feature, comp/agent, comp/cron, tool/skills, P3, needs-decision",
+      "difficulty": "★★☆（curator 生命周期逻辑）",
+      "status": "🔴 已撞车 — 08-04T03:10Z 核查：AI triage 评论确认 PR #77769 (fixes, +404/-18, config-gated archived-skill discovery) 已引用。弃用。",
+      "fix_point": "agent/curator.py 的 consolidation 逻辑",
+      "fix_idea": "把 archived skills 纳入 consolidation 候选；needs-decision",
+      "notes": "备选池成员，原判断'needs-decision 没人抢'——16:52 AI triage 出总结，PR 已出。验证：needs-decision 也挡不住 triage bot 流转。"
+    },
+    {
+      "number": 77549,
+      "title": "[Bug]: compaction completion notice ignores progress_notices=false（压缩完成通知绕过 progress_notices 开关，与开始通知不对称）",
+      "labels": "（无标签，未 triage）",
+      "difficulty": "★☆☆ 简单（reporter 自带复现脚本+根因定位）",
+      "status": "🔴 已撞车 — 08-03T18:20Z 核查：创建 10:05Z，PR #77551 'fix(gateway): gate compaction completion notice' 已 cross-ref（几小时内）。弃用。",
+      "fix_point": "gateway/run.py _prepare_gateway_status_message 的状态过滤集合（COMPACTION_DONE_STATUS 不在 _TEL... 集合里）",
+      "fix_idea": "把 COMPACTION_DONE_STATUS 纳入与 COMPACTION_STATUS 相同的门控集合，使 progress_notices=false 时 start/done 都不发",
+      "notes": "教学价值高（context 压缩机制 + gateway 状态消息门控），可作教学素材。撞车速度再次验证：reporter 自带根因的 issue 几乎必被秒抢。"
+    },
+    {
+      "number": 77538,
+      "title": "CLI /resume and /branch skip external context-engine session lifecycle（/resume /branch 只跑 reset 半套，外部 context engine 收不到 on_session_start）",
+      "labels": "type/bug, comp/agent, comp/cli, comp/plugins, P3, area/sessions",
+      "difficulty": "★★☆ 中等（需理解 ContextEngine 生命周期契约与 transition metadata 传递）",
+      "status": "🔴 已撞车 — 08-03T18:20Z 核查：创建 09:36Z，PR #77539 'fix(cli): notify context engines on resume and branch' 已 cross-ref。弃用。",
+      "fix_point": "hermes_cli/cli_commands_mixin.py 两处：agent.session_id=target_id + agent.reset_session_state() 丢 transition metadata",
+      "fix_idea": "改用 run_agent.py::_transition_context_engine_session()（带旧 session id / transition metadata），触发 on_session_end → on_session_start(new_id) 完整生命周期",
+      "notes": "教学价值高：直接展示 ContextEngine 生命周期钩子（on_session_end/on_session_start）如何被 reset_session_state 的兼容 fallback 绕过。可作教学素材。"
+    },
+    {
+      "number": 77475,
+      "title": "批量 fix(secrets) 安全审计 issue 系列（#77475-#77487，共 13 个：egress 掩码、cache TOCTOU、HKDF 拉伸、CommandSource 1MiB cap、registry 语义、.env 写卫生、test-runner 脆弱性等）",
+      "labels": "type/security, type/bug, type/test, comp/agent, area/auth, P3, needs-repro",
+      "difficulty": "★★☆~★★★（安全边界类，需深入 secrets 子系统）",
+      "status": "🟡 全部 needs-repro — 08-03T08:21Z 同一分钟批量提交（疑似一次安全审计拆单）。不推荐。",
+      "fix_point": "各 issue 各自的安全子系统",
+      "fix_idea": "不推荐：needs-repro + 安全边界类 + 审计者大概率自提 PR",
+      "notes": "按用户规则（security 边界类不推荐）跳过，仅记录。若其中某个出现 PR，可关注其修复模式作学习素材。"
+    },
+    {
+      "number": 77921,
+      "title": "[P1] Still reproducing in v0.19.1: empty tool_calls after repair_message_sequence（长会话 400+ 消息后永久卡死）",
+      "labels": "type/bug, comp/agent, provider/deepseek, P1, sweeper:risk-session-state, comp/dashboard, area/sessions",
+      "difficulty": "★★☆ 修复点需定位旁路（reporter 自带深度调查：sanitizer 直接调用能清 32/32，但线上请求仍带空数组 → 某条发送路径绕过 sanitize 或 sanitize 后被重建）",
+      "status": "🔴 已撞车 — 08-04T06:02CST 复查：PR #77944 (webtecnica, open, +43/-0, 2 files, mergeable=clean) 创建 19:27Z，距 issue 创建 18:34Z 仅 53 分钟。撞车速度纪录刷新。弃用（PR 本身是 message-repair 教学活教材）。",
+      "fix_point": "待定位：reporter 怀疑 WebUI 流式路径（_run_agent_streaming → run_conversation）有旁路绕过 sanitize；本地 conversation_loop.py:1022 与 chat_completion_helpers.py:1963 均有 sanitize 兜底",
+      "fix_idea": "先画全发送路径图（run_conversation → 各 transport），找没挂 _sanitize_api_messages 的旁路；或在 transport 层统一强制 sanitize（最稳）",
+      "notes": "✅ 曾推荐！教学价值极高：repair_message_sequence（三道 pass）+ sanitize_api_messages（最后安检）双防线设计，teach-13-message-repair.md 已写。撞车速度验证 3：P1 + reporter 自带根因调查 = 小时内被秒抢。PR #77944 的 root cause 分析（#59110 chokepoint fix 只修了 per-call wire copy）本身可作教学素材。"
+    },
+    {
+      "number": 77818,
+      "title": "alibaba-coding-plan provider silently drops reasoning_effort",
+      "labels": "type/bug, comp/agent, provider/qwen, P2",
+      "difficulty": "★☆☆~★★☆",
+      "status": "🔴 已撞车 — 08-04T03:10Z 核查：PR #77828 已 cross-ref。弃用。",
+      "fix_point": "provider 配置传递链",
+      "fix_idea": "弃用",
+      "notes": "provider 类，非核心，撞车快。"
+    },
+    {
+      "number": 77775,
+      "title": "SQLite preflight misclassifies vanished WAL/SHM sidecars as read-only",
+      "labels": "type/bug, comp/agent, comp/cli, P2",
+      "difficulty": "★★☆（竞态：探测与权限检查之间的 TOCTOU）",
+      "status": "🔴 已撞车 — 08-04T03:10Z 核查：PR #77767 已 cross-ref。弃用。",
+      "fix_point": "preflight_db_writability()",
+      "fix_idea": "弃用",
+      "notes": "session 存储相关（agent 基础机制），但撞车。"
+    },
+    {
+      "number": 77937,
+      "title": "[Feature]: Keyboard shortcut for secondary sidebar",
+      "labels": "（未 triage）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 桌面 UI 类，与 agent 核心原理无关，不推荐。",
+      "fix_point": "desktop UI",
+      "fix_idea": "不推荐",
+      "notes": "08-03T19:04 创建。"
+    },
+    {
+      "number": 77936,
+      "title": "macOS arm64: Sherpa wake lock omits required core and reports false availability",
+      "labels": "（未 triage）",
+      "difficulty": "—",
+      "status": "🟡 记录 — macOS 平台类，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-03T19:00 创建。"
+    },
+    {
+      "number": 78004,
+      "title": "[Bug]: hermes skills install resolves/caches by skill name, not source identifier — silently installs wrong same-name skill, overwriting local content",
+      "labels": "type/bug, comp/cli, tool/skills, P2, area/install-update",
+      "difficulty": "★★☆ 中等（安全扫描缓存键 + 安装解析链，reporter 自带完整复现）",
+      "status": "🔴 已撞车 — 08-04T06:02CST 复查：PR #78017 (webtecnica, open, +105/-2, 2 files, mergeable=clean) 创建 21:38Z，距 issue 创建 21:17Z 仅 21 分钟。撞车速度纪录再刷新。",
+      "fix_point": "hermes skills install 的 security-scan 结果缓存按 skill name 而非 source identifier 键控（tools/skills_hub.py 安装解析链）",
+      "fix_idea": "缓存键改用完整 source identifier（owner/repo/path）而非 frontmatter name；安装前做 name 不匹配校验",
+      "notes": "🎯 直接命中用户学习重心（skill 加载机制）！issue 质量高：复现步骤详尽、解释清楚（同名 skill 静默覆盖本地手写内容、scan 报告看着合法因为是真实扫描只是扫错了内容）。教学价值：skill 安装解析链 + 安全扫描缓存。可惜被秒抢。"
+    },
+    {
+      "number": 78026,
+      "title": "Buzz agents cannot use the buzz CLI from the terminal: BUZZ_* credentials are stripped",
+      "labels": "（未 triage）",
+      "difficulty": "—",
+      "status": "🟡 记录 — env 传递类（同 #76243 模式），非 agent 核心，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-03 晚创建。BUZZ 私有 key 剥离问题再现，webtecnica 可能已盯上。"
+    },
+    {
+      "number": 78022,
+      "title": "gateway stays running but webhook platform drops into a reconnect loop",
+      "labels": "（未 triage）",
+      "difficulty": "—",
+      "status": "🟡 记录 — gateway 平台类，按用户规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-03 晚创建。"
+    },
+    {
+      "number": 78011,
+      "title": "MoA mode and Lm Studio JIT malfunctioning",
+      "labels": "type/bug, comp/agent, area/config, P3, needs-*",
+      "difficulty": "—",
+      "status": "🟡 记录 — MoA（mixture-of-agents）+ 本地推理栈，provider 相关非核心，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-03 晚创建。"
+    },
+    {
+      "number": 78010,
+      "title": "[Desktop] Session history rolled back on interrupted_during_api_call — 31 minutes of chat lost",
+      "labels": "type/bug, comp/gateway, P2, needs-repro",
+      "difficulty": "—",
+      "status": "🟡 记录 — desktop 会话回滚，needs-repro + desktop 专有，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "会话管理相关但与 desktop 前端耦合深，本地难验证。"
+    },
+    {
+      "number": 78007,
+      "title": "A2A: long tasks can never complete — client timeout (120s) dies before the server finishes",
+      "labels": "type/bug, comp/plugins, P3",
+      "difficulty": "—",
+      "status": "🟡 记录 — A2A 协议平台类，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-03 晚创建。"
+    },
+    {
+      "number": 78000,
+      "title": "[Bug]: maximum call stack size exceeded",
+      "labels": "type/bug, P3, needs-repro, comp/desktop",
+      "difficulty": "—",
+      "status": "🟡 记录 — needs-repro + desktop，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-03 晚创建。"
+    },
+    {
+      "number": 77997,
+      "title": "Desktop app 'No inference provider configured' over SSH remote gateway",
+      "labels": "type/bug, provider/nous, area/config, P2",
+      "difficulty": "—",
+      "status": "🟡 记录 — desktop/provider 配置类，非核心，不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-03 晚创建。"
+    },
+    {
+      "number": 78148,
+      "title": "[P1] Context compaction after tool loop leaves stale '[memory]' as response template（压缩发生在 tool loop 中途，残留 '[memory]' 字符串成为后续所有回复的默认模板）",
+      "labels": "type/bug, comp/agent, P1, sweeper:risk-session-state, area/sessions, area/compression",
+      "difficulty": "★★☆（tool loop + compaction 交叉场景，需理解压缩输出如何污染响应路径）",
+      "status": "🔴 已撞车 — 08-04T04:30Z 核查：创建 03:21Z，PR #78175 (fix(agent): discard bare tool-call marker before fallback/pe, open) 已 cross-ref（15 分钟内）。弃用。",
+      "fix_point": "压缩输出残留裸 tool-call marker（[memory]），fallback/响应路径未丢弃",
+      "fix_idea": "弃用（PR 已出）。PR 修复思路：fallback 前丢弃裸 tool-call marker。",
+      "notes": "再次验证：P1 + 具体复现 = 秒抢。教学价值高（tool loop 与 compaction 交叉 + 响应模板污染），可作教材素材，暂不展开。"
+    },
+    {
+      "number": 78144,
+      "title": "Gateway slash menu shows zero skills when HERMES_HOME is behind a symlink（_collect_gateway_skill_entries 用 resolve() 前缀过滤，但扫描器返回未 resolve 路径 → symlink 时全部 startswith 失败）",
+      "labels": "type/bug, comp/cli, comp/gateway, tool/skills, P3",
+      "difficulty": "★☆☆~★★☆（路径前缀比较的 resolve 不一致，reporter 自带根因；但需确认全链路哪些路径 resolve 哪些不 resolve）",
+      "status": "🟢 仍干净 — 08-05T04:3XZ 复查：open、无 assignee/评论；timeline cross-ref 只有 #78782（telegram setMyCommands 平台类，无关）。备选池唯一干净候选。",
+      "fix_point": "hermes_cli/commands.py::_collect_gateway_skill_entries（SKILLS_DIR.resolve() 前缀 vs 未 resolve 的扫描路径）",
+      "fix_idea": "统一路径基准：要么扫描器也 resolve，要么过滤端不 resolve；或改用 Path.relative_to 容错。注意与 #75130 同根（symlink 路径解析不一致），修 #75130 的 PR 可能顺带覆盖，需持续盯。",
+      "notes": "🎯 命中学习重心（skill 加载机制）+ 与 #75130 同根（symlink 路径解析不一致）。当前是备选池唯一幸存者。按决策 B 只记录，等用户表态。"
+    },
+    {
+      "number": 78273,
+      "title": "[Bug]: auxiliary temperature retry can't recover when the model also rejects max_tokens (gpt-5)",
+      "labels": "type/bug, comp/agent, provider/openai, P2",
+      "difficulty": "★☆☆（表面）→ 实际：已过期",
+      "status": "🟢 已证伪（stale）— 08-04T07:1XZ 深度核查：reporter 用 v0.13.0(2026.5.7)；当前 upstream main 已有三层防线（#34530 省略 max_tokens → auxiliary_max_tokens_param 翻译 → retry 链剥参兜底），场景已自愈。不推荐。",
+      "fix_point": "agent/auxiliary_client.py 重试链（7144-7195 sync / 7712-7761 async）+ _build_call_kwargs（6660-6692）",
+      "fix_idea": "无需修。reporter 建议的「max_tokens 翻译成 max_completion_tokens」upstream 已实现（git diff HEAD upstream/main 证实）。唯一残留边缘：Anthropic wire/NIM 端点 max_tokens 必填 + 推理模型双拒 → 第 3 次调用因缺必填字段仍 400，但属窄场景+Z.AI 修复故意为之。",
+      "notes": "🎯 教学产出 teach-16-issue-premise-verification.md（证伪流程：版本检查→本地走链→upstream diff→跑测试）。验证亮点：17 个同步测试全绿；2 个 async 测试失败是环境坑（pytest-asyncio 未装，Unknown pytest.mark.asyncio），非代码 bug。"
+    },
+    {
+      "number": 78245,
+      "title": "lifecycle_guard Branch D (p?kill) matches inside the word 'skill', false-blocking innocent commands",
+      "labels": "type/bug, comp/cron, tool/terminal, P2",
+      "difficulty": "★☆☆（reporter 自带根因，正则 \b 边界问题）",
+      "status": "🔴 已撞车 — 08-04T07:1XZ 核查：创建 06:25Z，PR #78251 'fix: avoid false lifecycle blocks for skill logs' 已 cross-ref（约 1 小时内）。弃用。",
+      "fix_point": "cron/lifecycle_guard.py Branch D 正则 p?kill\\b（\b 挡不住 skill 内部的 kill）",
+      "fix_idea": "弃用（PR 已出）。教学彩蛋：#77173 Bug3 漏杀 killa 变体 → #78245 误杀 skill，同一正则两端翻车。",
+      "notes": "非 agent 核心（cron/terminal 守卫），按用户规则不推荐，仅记录+作教学素材。同族：#78256/#78244（embedded null byte，duplicate，同模块另一 bug）。"
+    },
+    {
+      "number": 78182,
+      "title": "Gateway writes through a corrupt state.db indefinitely: one-shot FTS rebuild reports success without persisting",
+      "labels": "type/bug, comp/agent, comp/gateway, P2, sweeper:risk-session-state, area/sessions",
+      "difficulty": "★★☆（修复点模糊：headless/gateway 恢复语义，需深读 hermes_state.py）",
+      "status": "🟢 干净 — 08-04T07:1XZ 核查：无 assignee/评论/cross-ref（创建 04:27Z）。仅记录，不推荐（修复点模糊）。",
+      "fix_point": "hermes_state.py FTS rebuild 失败不落盘 + gateway 继续写入 corrupt db",
+      "fix_idea": "待读代码；reporter 明确非 #72046/#69603 duplicate（聚焦 rebuild 失败后的恢复语义）。",
+      "notes": "会话存储机制（agent 基础），但修复点模糊、需要 deep dive 才能定方案。攒状态。"
+    },
+    {
+      "number": 78237,
+      "title": "[P1] User message re-injected mid-turn hours after original delivery (duplicate OUT-OF-BAND message)",
+      "labels": "type/bug, comp/agent, comp/gateway, platform/feishu, P1, sweeper:risk-session-state, sweeper:risk-message-delivery",
+      "difficulty": "★★★（gateway 竞态 + feishu 平台，难复现）",
+      "status": "🟡 记录 — 08-04T07:1XZ：1 评论（AI triage），无 cross-ref。P1 但修复点模糊+平台耦合深，不推荐。",
+      "fix_point": "待定位（OOB 消息注入竞态）",
+      "fix_idea": "不推荐。P1 大概率被秒抢（历史规律），且本地难端到端验证。",
+      "notes": "消息注入/会话状态相关，与 teach-13 message-repair 有理论关联，但实战价值低。"
+    },
+    {
+      "number": 78382,
+      "title": "[P1] MOA: _moa_prepared_request leaked to native OpenAI client when agent.client is replaced (fallback/rotation)",
+      "labels": "type/bug, comp/agent, provider/openai, P1",
+      "difficulty": "★★☆ 中等（根因清晰，reporter 自带定位：conversation_loop 注入点与 dispatch 点都以 provider 标签为准，没查 client 实例类型）",
+      "status": "🔴 已撞车 — 08-05T00:0X 复查：PR #78409 (fix(moa): preserve facade across client rebuilds) 已 cross-ref。弃用（PR 作教学素材）。",
+      "fix_point": "agent/conversation_loop.py:2319（注入 api_kwargs[\"_moa_prepared_request\"] 只查 agent.provider==\"moa\"）+ agent/chat_completion_helpers.py:505-509（dispatch 同样只查 provider 标签）",
+      "fix_idea": "注入点与 dispatch 点都应以 client 实际类型为准（检查 agent.client 是否是 MoAClient facade / 有无 prepare 方法），或在 _replace_primary_openai_client 重建时若 provider==moa 则重建 MoAClient 而非 native client",
+      "notes": "🎯 命中学习重心（agent 核心循环请求准备 + client 替换机制）！教学点：配置态（provider 标签）与运行时态（client 实例）脱节的经典案例——rotation/fallback 替换了 client 但没同步 provider 标签。与 teach-14（生命周期 metadata 传递）同型：状态变化的路径没被检查条件覆盖。已本地验证：upstream main conversation_loop.py:2319 注入条件确实只查 agent.provider，_replace_primary_openai_client（run_agent.py:4170）重建 native client 不改 provider。"
+    },
+    {
+      "number": 78383,
+      "title": "MEDIA: tag with spaces in path delivered twice - extensionless fallback defeats dedup (Windows/Feishu)",
+      "labels": "（无标签）",
+      "difficulty": "★★☆（正则匹配 + 平台适配层）",
+      "status": "🟡 记录 — 平台类（gateway 媒体投递），按用户规则不推荐。",
+      "fix_point": "BasePlatformAdapter.extract_media 的 MEDIA_EXTENSIONLESS_TAG_RE 不支持空格 → 截断匹配 + 重复投递",
+      "fix_idea": "不推荐",
+      "notes": "Windows + Feishu 专有，与 agent 核心无关。"
+    },
+    {
+      "number": 78396,
+      "title": "bug(send): hermes send cannot deliver to a2a targets (misleading 'No home channel set')",
+      "labels": "（无标签）",
+      "difficulty": "★☆☆~★★☆",
+      "status": "🔴 已撞车 — 创建 10:07:35Z，PR #78397（fix(a2a): recognize a2a chat ids in send_message target parsing）10:07Z 已存在（PR 比 issue 还早 35 秒，reporter 自提自修模式）。弃用。",
+      "fix_point": "tools/send_message_tool.py _parse_target_ref() 无 a2a 分支",
+      "fix_idea": "弃用",
+      "notes": "自报自修（issue+PR 同分钟出现），再次验证秒抢规律。"
+    },
+    {
+      "number": 78600,
+      "title": "search_files tool silently returns 0 results when regex contains ?, +, |, or ( ) metacharacters",
+      "labels": "（未 triage）",
+      "difficulty": "★☆☆ 已本地验证根因（grep fallback 用 BRE 语义）",
+      "status": "🔴 出局（duplicate）— 创建 16:03Z，16:05:52Z 即被 mountgrabber 标 duplicate of #39294 关闭（state_reason=completed）。评论确认根因与我们本地验证完全一致：grep fallback 用 BRE 无 -E，?+|() 被当字面量；装 ripgrep 也能规避（rg 走 ERE）。教训：扫描时应先搜相似老 issue（#39294 存在已久）；本地 BRE/ERE 分析仍可作教学素材。",
+      "fix_point": "tools/file_operations.py _search_with_grep（2396 行 `grep -rnH` → `grep -rnHE`）",
+      "fix_idea": "主修复：加 -E 使 grep fallback 与 rg 语义一致（ERE）。测试：patch _has_command('rg')→False 强制 grep 路径，断言 'file?|file|files' 等 ERE 模式正常匹配。顺带关注 --exclude-dir/--include 是 GNU 扩展、BSD grep 不支持（macOS 原生 grep 会报错而非 0 结果，与 issue 现象不符 → 用户环境应为 GNU grep 或 rg 缺失）。",
+      "notes": "🎯 曾推荐！本地深挖验证根因（_search_with_grep 2396 行 `grep -rnH` 无 -E），与官方 duplicate 判定完全吻合——分析能力得到验证，但漏了老 issue 检索步骤。教学素材保留（双路径 fallback + BRE/ERE 语义 + exit code 语义）。"
+    },
+    {
+      "number": 78598,
+      "title": "/steer on a tool result with non-string content produces invalid content for chat-completions providers (400 loop)",
+      "labels": "（未 triage）",
+      "difficulty": "★★☆ 修复点已确认（wire format 传递需设计）",
+      "status": "🔴 已撞车 — 08-05T06:0X 复查：双 PR 竞争：PR #78615 (gentosai404, +37/-3, 2 files) + PR #78706 (webtecnica, +83/-11, 2 files, mergeable=clean)。弃用。",
+      "fix_point": "agent/agent_runtime_helpers.py:3359-3368（非字符串 content → block-list 转换无条件执行）",
+      "fix_idea": "需要 wire format 感知：chat_completions 模式把非字符串 content 转纯字符串（str(existing_content)+marker），只有 anthropic_messages 模式才用 block-list。复杂点：需查调用方（tool_executor 各调用点）能否传 api_mode，或从 agent 状态读取。",
+      "notes": "🎯 曾推荐（08-05 03:0X 还是🟢干净备选）→ 几小时内双 PR 撞车。webtecnica 再次出现（#77944/#78017/#78382 之后）。教学素材：wire format 适配（chat_completions vs anthropic_messages block-list）。"
+    },
+    {
+      "number": 78580,
+      "title": "[Bug]: max-iteration runtime nudge is treated as human intent during context compaction",
+      "labels": "（未 triage）",
+      "difficulty": "—（已撞车）",
+      "status": "🔴 已撞车 — 创建 15:34Z，PR #78594 (fix(agent): treat max-iteration nudge as synthetic during co...) 15:55Z cross-ref，21 分钟被秒抢（triage bot 评论确认）。弃用。",
+      "fix_point": "handle_max_iterations() 追加 role=user nudge（chat_completion_helpers.py:2084-2115）+ _SYNTHETIC_USER_PREFIXES 不识别该 marker（conversation_compression.py:1884-1932）+ _is_synthetic_compression_user_turn()（context_compressor.py:4164+）",
+      "fix_idea": "弃用。PR 思路：提取 MAX_ITERATIONS_SUMMARY_REQUEST 共享常量 + 教 _is_synthetic_compression_user_turn() 识别。",
+      "notes": "🎯 教学价值高：合成消息过滤机制（与 teach-12 iteration-budget、teach-13 message-repair 同族）。撞车速度验证 +N：reporter 自带根因（精确到行）→ 21 分钟被抢。可作教学素材（合成 role=user 消息如何污染压缩快照）。"
+    },
+    {
+      "number": 78519,
+      "title": "Bug: background_review pending write field mismatch（write_file pending 用 content 字段但审批回放要 file_content）",
+      "labels": "type/bug, comp/agent, tool/skills, P2",
+      "difficulty": "—（已撞车）",
+      "status": "🔴 已撞车 — 创建 14:12Z，PR #78537 (fix(skill_manage): normalize content->file_content in staged...) 已 cross-ref。弃用。",
+      "fix_point": "skill_manager_tool.py:1402 _apply_skill_write_gate 原样透传 kwargs → :1453 apply_skill_pending 用 file_content=payload.get('file_content') 取到 None → :1570 失败",
+      "fix_idea": "弃用。PR 思路：skill_manage 入参 content→file_content 规范化。",
+      "notes": "🎯 skill 相关命中学习重心。教学价值：pending/审批回放机制（gate 暂存→审批→回放），参数名契约不一致的经典 bug 族（reporter 另发现 memory replace pending 同型问题）。可作教学素材。"
+    },
+    {
+      "number": 78793,
+      "title": "write_file/patch silently corrupt git-managed state in normal repos (.git/HEAD, refs/, index)",
+      "labels": "type/bug, comp/tools, tool/file, P2",
+      "difficulty": "★☆☆（follow-up 类，reporter 自带完整方案：拒绝 .git 目录内 git-managed 路径，白名单 .git/config、hooks/、info/exclude）",
+      "status": "🔴 已撞车 — 创建 17:46Z，作者 andrexibiza 17:46Z 立即 Claiming，PR #78806 18:01Z 前已出（'Resolved by PR #78806 — ready to close'）。自报自修模式。弃用（file_safety 守卫教学素材）。",
+      "fix_point": "agent/file_safety.py + tools/file_tools.py _check_sensitive_path（#78565 worktree .git pointer 守卫的共享拒绝层扩展）",
+      "fix_idea": "弃用。PR #78806 思路：共享拒绝层拒写 .git 目录内 git-managed 状态（HEAD/index/refs/objects/logs/packed-refs/ORIG_HEAD/FETCH_HEAD/MERGE_HEAD 等），用户自有路径（.git/config、hooks/、info/exclude、description）保持可写；read_file/search_files 保持宽松；bare repo 另议。",
+      "notes": "教学点：路径守卫的 allowlist/denylist 设计 + 共享拒绝层（_check_sensitive_path）。与前身 #78565 同族。撞车速度：作者自己写 issue 自己立刻认领，别人根本没机会。"
+    },
+    {
+      "number": 78801,
+      "title": "holographic memory: retrieval_count never increments via agent tool path (search/probe/related)",
+      "labels": "type/bug, comp/plugins, tool/memory, P3, area/memory",
+      "difficulty": "★☆☆~★★☆（reporter 自带根因+建议修复；本地已验证三层结构）",
+      "status": "🔴 已撞车 — 08-05T06:0X 复查：PR #78864 (andyst-dev, open, +119/-0, 3 files, mergeable=unstable) 创建 19:34Z，距 issue 创建 17:56Z 约 1.5 小时。弃用。",
+      "fix_point": "plugins/memory/holographic/__init__.py _handle_fact_store（270 行）tool-handler 层统一递增；或 store.py 加 bump_retrieval(fact_ids) helper（reporter 已给完整实现）",
+      "fix_idea": "tool-handler 层在成功 search/probe/related 后调 store.bump_retrieval(fact_ids)；prefetch 是否计入为设计决策（保守选择：只计显式 agent tool 调用）。验收：事实检索后 retrieval_count 递增；janitor 陈旧判定不再误报。",
+      "notes": "🎯 曾推荐！昨晚 03:10 本地验证根因（store.py:284 唯一递增点在 search_facts()，retriever 三方法绕过），准备 06:00 推荐——结果 1.5 小时被抢。再次验证：本地验证过根因的候选也逃不过秒抢。PR #78864 实现思路与本地方案一致（tool-handler 层递增 + store helper），可作教学素材（memory 插件四层结构 + '功能正常但副作用丢失' bug 型）。"
+    },
+    {
+      "number": 78807,
+      "title": "[Bug]: DeepSeek V4 Flash 0731 infinite reasoning loop",
+      "labels": "type/bug, comp/agent, provider/deepseek, P3",
+      "difficulty": "★★★（模型行为 vs Hermes bug 存疑：reporter 自引 Grok 猜测是模型训练问题；修复点模糊）",
+      "status": "🟡 记录 — 无 assignee/评论。开放问题：是否为 Hermes 侧 bug（类比 #37255/#37280 的 tool call 循环检测扩展）。",
+      "fix_point": "待定（若 Hermes 侧修：reasoning loop 检测器）",
+      "fix_idea": "不推荐：模型行为争议大 + 修复点模糊。仅记录。",
+      "notes": "与我们当前运行的模型相同，但大概率是模型侧问题。观察。"
+    },
+    {
+      "number": 78900,
+      "title": "[Feature]: Approval for simple write actions（写操作可配置 manual/approve/smart 审批模式）",
+      "labels": "type/feature, comp/agent, comp/tools, area/auth, P3, sweeper:risk-security-boundary",
+      "difficulty": "★☆☆（reporter 自称 Scope: Small，单文件 <50 行；但 feature + security-boundary 方向未定）",
+      "status": "🟡 观察 — 08-05T04:3XZ 复查：仍 open、无评论/assignee/cross-ref。按决策 B 只记录不推荐。",
+      "fix_point": "write 审批机制（file_safety / approval 配置链）",
+      "fix_idea": "配置项 approval.mode ∈ {manual, approve, smart}，写操作前按模式走审批；参考 #78519 skill write gate 的 pending/审批回放机制",
+      "notes": "沾 agent 核心边（审批机制是 agent 基础），但 feature 类 + needs 决策 + security-boundary 标签 → 被收割/被关风险高。仅观察，不主动推荐。"
+    },
+    {
+      "number": 78915,
+      "title": "feat(devx): worktree health gate + self-heal — survive concurrent sessions mutating worktrees",
+      "labels": "type/feature, tool/skills, P3",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05T06:0X：与 #78565 family（worktree git-file guard）同族，devx 专项，非 agent 核心。不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-04T21:21 创建。"
+    },
+    {
+      "number": 78914,
+      "title": "feat(ops): phased disk winddown — persist-before-delete, subagent transcripts",
+      "labels": "type/feature, tool/delegate, tool/skills, P3",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05T06:0X：磁盘清理 ops 类，非 agent 核心。不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-04T21:21 创建。"
+    },
+    {
+      "number": 79034,
+      "title": "MEMORY_GUIDANCE in prompt_builder.py conflicts with skill-based memory doctrine（无条件注入的『存持久事实』指导 vs skill 里更严格的内存纪律；弱指导反而覆盖强指导）",
+      "labels": "type/bug, comp/agent, tool/memory, P3, needs-decision, area/memory",
+      "difficulty": "★☆☆~★★☆（reporter 自带两种方案：改措辞 / 让 skill 覆盖；但需权衡 prompt 缓存）",
+      "status": "🟡 观察 — 08-05T02:22Z 创建，无 assignee/评论/cross-ref。",
+      "fix_point": "agent/prompt_builder.py:166 MEMORY_GUIDANCE 块 + tools/memory_tool.py schema 措辞",
+      "fix_idea": "方案A：措辞对齐（『存指针和操作事实，持久≠该入内存』）；方案B：有加载 skill 定义 memory doctrine 时抑制默认块（更符合『capability at edges』）。注意：改 system prompt 内容会 invalidate prompt 缓存（AGENTS.md 铁律），需谨慎——这本身就是教学点",
+      "notes": "🎯 命中学习重心（prompt 构建 + memory 机制）！与 walkthrough-2 的『skill 内容注入走 user message 保缓存』直接关联。needs-decision + 动 system prompt，维护者大概率要讨论，撞车风险中。"
+    },
+    {
+      "number": 79035,
+      "title": "Adopt related_skills frontmatter convention for dependency graph visibility（159 个 skill 只有 1 个用 metadata.hermes.related_skills；审计靠正则扫正文）",
+      "labels": "type/feature, comp/agent, tool/skills, P3, needs-decision",
+      "difficulty": "★★☆（3 处改动：文档化约定 + skills_tool 暴露索引 + Curator 悬空引用检查；feature + needs-decision）",
+      "status": "🟡 观察 — 08-05T02:22Z 创建，无 assignee/评论/cross-ref。",
+      "fix_point": "tools/skills_tool.py（available_skills 索引暴露 related_skills）+ agent/curator.py（归档时悬空引用检查）+ skill 文档",
+      "fix_idea": "documentation + loader 暴露 metadata.hermes.related_skills + curator 归档前检查引用方。与 #75130 修法（iter_skill_index_files 统一遍历）同模块",
+      "notes": "🎯 命中学习重心（skill frontmatter 解析）！与 walkthrough-2 直接相关——frontmatter 里已经存在的字段没有文档/没有暴露。feature 类 + needs-decision，维护者方向未定。"
+    },
+    {
+      "number": 79047,
+      "title": "api_server 请求绕过 get_tool_definitions() 缓存，每次 agent 创建多花 ~3.3s（cache_key=False）",
+      "labels": "type/perf, comp/gateway, comp/tools, P2, bug",
+      "difficulty": "★★☆（reporter 自带时间线日志定位到 cache_key=False；但 api_server 路径本地难端到端复现）",
+      "status": "🟡 观察 — 08-05T03:09Z 创建，无 assignee/评论/cross-ref。",
+      "fix_point": "model_tools.get_tool_definitions 缓存键/调用路径（api_server 请求为什么 cache_key=False）",
+      "fix_idea": "查 get_tool_definitions 的缓存键构成（toolset 集合/quiet 参数等），让 api_server 路径命中顶层缓存",
+      "notes": "tool 系统机制相关（工具定义收集+缓存），教学价值中等。gateway 平台类沾边 + perf，本地难验证 → 按规则不主动推荐，记录观察。"
+    },
+    {
+      "number": 79030,
+      "title": "Guardrail bypass: sensitive config can be edited by shell when patch/write_file is blocked",
+      "labels": "type/security, comp/tools, tool/terminal, tool/file, area/config",
+      "difficulty": "—（security 边界类）",
+      "status": "🟡 记录 — 08-05T02:05Z 创建。按用户规则（security 边界类）不推荐，观察其修复模式。",
+      "fix_point": "config 守卫 vs shell 直改（file_safety 相关）",
+      "fix_idea": "不推荐",
+      "notes": "与 #78565/#78793（.git 守卫）同族的守卫边界问题。若出 PR 可作教学素材（守卫范围设计）。"
+    },
+    {
+      "number": 79026,
+      "title": "Wake word macOS ARM64 失效（tool/tts，平台类）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05 早间创建。"
+    },
+    {
+      "number": 79029,
+      "title": "Desktop 会话侧栏 update 后空白（desktop 类）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05 早间创建。"
+    },
+    {
+      "number": 79040,
+      "title": "hermes update 完成后进程不退出（needs-repro，环境类）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05 早间创建。"
+    },
+    {
+      "number": 79042,
+      "title": "RFC: Hermes Distributed Orchestrator（feature/innovation，非 bug）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05 早间创建。"
+    },
+    {
+      "number": 79044,
+      "title": "Slack channel 目录发现阻塞入站消息（platform/slack）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05 早间创建。"
+    },
+    {
+      "number": 79048,
+      "title": "macOS 共享 token 的 profile 网关互相驱逐（platform/discord）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05 早间创建。"
+    },
+    {
+      "number": 79050,
+      "title": "Desktop 切会话丢消息（needs-repro，desktop）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05 早间创建。"
+    },
+    {
+      "number": 79054,
+      "title": "Desktop ASCII 图代码块渲染（desktop UI）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05 早间创建。"
+    },
+    {
+      "number": 79057,
+      "title": "Telegram message_reaction → 会话事件（platform/telegram）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05 早间创建。"
+    },
+    {
+      "number": 79059,
+      "title": "/model --provider custom 校验用上一会话 base_url（comp/cli，可观察）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "comp/cli 沾边，观察。"
+    },
+    {
+      "number": 79064,
+      "title": "Desktop 重连后会话历史截断（desktop + tui_gateway）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05 早间创建。"
+    },
+    {
+      "number": 79065,
+      "title": "Desktop 附件上传 workspace 只读失败（desktop）",
+      "labels": "（见 desc）",
+      "difficulty": "—",
+      "status": "🟡 记录 — 08-05 新池扫描，按规则不推荐。",
+      "fix_point": "—",
+      "fix_idea": "不推荐",
+      "notes": "08-05 早间创建。"
+    },
+    {
+      "number": 79100,
+      "title": "Length-continuation counter is not reset after tool-call recovery（截断续写计数器在工具调用成功后不归零，4 次不连续截断被误判为连续失败）",
+      "labels": "（未 triage）",
+      "difficulty": "★☆☆（1 行修复，根因已本地验证）",
+      "status": "🔴 已撞车 — 创建 05:31Z，06:32Z samrusani 评论说亲自修，06:52Z RelaxJonh 提 PR #79153（1 文件 1 行）。1 小时 21 分被秒抢。弃用（作教学素材 teach-17）。",
+      "fix_point": "agent/conversation_loop.py:5083（工具执行成功后只复位 truncated_tool_call_retries，漏了 length_continue_retries；全生命周期：683-684 初始化 / 2027 +1 / 2033 <4 判定 / 2011 fallback 复位 / 5480 最终回复复位 / 5083 漏复位）",
+      "fix_idea": "PR #79153 思路：5083 行旁补 length_continue_retries = 0。root cause 与本地分析完全一致：5080-5082 注释写 'per-turn retry counters'（复数）但只 reset 一个。",
+      "notes": "🎯 直接命中 agent 核心循环！教学产出 teach-17 已写（计数器生命周期不对称 + 注释与代码背离 + 复位点分散三问）。撞车速度验证 +N：reporter 自带根因+引用 commit 24282dce → 1.2h 被抢。"
+    },
+    {
+      "number": 79121,
+      "title": "vision_analyze crashes with callable API key on custom OpenAI-compatible endpoints（auxiliary client 假设 explicit_api_key 是字符串）",
+      "labels": "（未 triage）",
+      "difficulty": "★☆☆~★★☆（reporter 自带最小复现）",
+      "status": "🔴 已撞车 — 创建 06:08Z，PR #79150 (fix: resolve callable API keys in auxiliary custom endpoint) 已 cross-ref。弃用。",
+      "fix_point": "resolve_provider_client() custom provider 分支的 explicit_api_key 处理",
+      "fix_idea": "弃用。callable api_key（lambda 短期凭证）在 main runtime 被接受，但 auxiliary client 当字符串用 → AttributeError。",
+      "notes": "auxiliary client（辅助 LLM 机制）沾学习重心边，但撞车快。记录。"
+    },
+    {
+      "number": 79101,
+      "title": "API server session stores virtual model alias as real model, breaking gateway default routing",
+      "labels": "（未 triage）",
+      "difficulty": "★☆☆~★★☆（reporter blazzbyte 自提 PR）",
+      "status": "🔴 已撞车 — 创建 05:39Z，PR #79102 (blazzbyte, 自报自修) 05:40Z 即 cross-ref。弃用。",
+      "fix_point": "api_server 会话创建/聊天路径的 model 归一化（_handle_create_session/_handle_session_chat）",
+      "fix_idea": "弃用。PR #79102：虚拟别名 'hermes-agent' 归一化为 None → 回落 gateway 默认 model。",
+      "notes": "会话管理机制（agent 基础），自报自修模式。"
+    },
+    {
+      "number": 79072,
+      "title": "[Feature] intent-driven context assembly — load only what the task needs（按需加载上下文：skill 索引/toolset/memory 全量注入的成本问题）",
+      "labels": "（未 triage）",
+      "difficulty": "★★★（feature + 设计决策：与 prompt-caching-is-sacred 铁律直接冲突）",
+      "status": "🟡 观察 — 08-05T04:22Z 创建，无 assignee/评论/cross-ref。",
+      "fix_point": "system prompt 构建全链（prompt_builder skill 索引 / toolsets / memory 注入）",
+      "fix_idea": "不推荐：大设计 + 与 AGENTS.md『prompt 缓存神圣』直接冲突（动态按需注入 = 每轮缓存失效）。但教学价值极高——正好展示『固定前缀 vs 动态上下文』的设计张力。",
+      "notes": "🎯 命中学习重心（prompt 构建）！reporter 列出现状成本：195+ skill 全量索引 + 静态 toolset + 全量 memory ≈ 40-50K 固定前缀。与 walkthrough-1/2 的三层缓存设计直接相关：缓存命中的前提就是 key 稳定，intent-driven 动态组装会打碎 key。可作为『为什么 Hermes 宁可付固定前缀成本』的教学讨论素材。"
+    },
+    {
+      "number": 79080,
+      "title": "[Feature] add explicit collect/ack lifecycle for async delegation results（父代理想主动 join 异步委托结果，缺 collect/ack 操作）",
+      "labels": "（未 triage）",
+      "difficulty": "★★☆（feature，有 PR #8228 先例可参考）",
+      "status": "🟡 观察 — 08-05T04:44Z 创建，无 assignee/评论/cross-ref。",
+      "fix_point": "tools/delegate_tool.py 异步委托完成事件生命周期",
+      "fix_idea": "不推荐：feature + 设计决策（谁该消费、ack 语义怎么定）。与 teach-12 iteration budget 同模块（delegation），可作背景知识。",
+      "notes": "delegation 机制沾学习重心边。观察，不主动推荐。"
+    }
+  ],
   "awaiting_answer": false,
-  "last_question": "接下来你想做什么？1. 继续探索 skills/memory 2. 扫 upstream issue 3. 换方向",
-  "last_tick_time": "2026-07-31T09:10:00+08:00",
-  "notes": [
-    "项目有 3129 个 Python 文件，3 个 God File",
-    "工具系统由 3 层构成：registry auto-discovery + toolsets 组合 + model_tools 分发",
-    "tools/ 下有 95 个 .py 文件，通过 registry.register() 自动注册",
-    "核心工具有 ~80 个（_HERMES_CORE_TOOLS），扩展工具集不计其数",
-    "check_fn 有 30s TTL 缓存 + 60s 瞬态失败宽容期",
-    "Plugin 和 MCP 都通过 registry 注册，和内置工具没有区别对待",
-    "dispatch 前有 4 层安全过滤：check_fn → 中间件 → plugin hooks → 文件安全",
-    "Gateway 是 Hermes 的对外窗口：适配器模式支持 N 平台，管道模式处理消息",
-    "Gateway 46 个 .py 文件，共 46,543 行，核心是 GatewayRunner（~23K LOC）",
-    "BasePlatformAdapter (5933 行) 是平台适配器的 ABC，start/stop/send/send_typing/send_image 等 20+ 方法",
-    "流式输出用 queue.Queue 桥接同步 agent 回调和异步平台投递（GatewayStreamConsumer）",
-    "Gateway 支持多 Profile 复用：一个实例用多个 bot token 同时连接 Telegram/Discord 等"
-  ]
+  "last_question": "（2026-08-04 08:20 已回复）用户选择 B：把已撞车但教学价值高的 PR 当教材（#77538 context-engine 生命周期 / #77549 compaction 门控，agent 核心机制活例子，写 teach-14/15）。下一 tick 执行 B 策略，不再追问方向。",
+  "code_reading": {
+    "enabled": true,
+    "cadence": "1天1份",
+    "format": "走读卡（现象入口→调用路径图→逐段精读≤30行→动手实验→3道思考题）",
+    "started_at": "2026-08-04",
+    "cards_done": [
+      "walkthrough-1-skill-loading.md（skill 加载链路：prompt_builder 缓存→iter_skill_index_files→_find_skill）",
+      "walkthrough-2-skill-frontmatter.md（frontmatter 解析→平台/环境门→_skill_should_show 条件激活）",
+      "walkthrough-3-cli-core-loop.md（CLI 主核心：main→run→chat→run_conversation 核心循环，含 max_iterations/budget 双闸与 ReAct 出口）",
+      "walkthrough-3.1-cli-map.md（cli.py 298 函数三分类速查地图：117 纯函数跳过 / 24 包装器找真身 / 157 副作用按需读，方法论来自 painless-code-reading skill）"
+    ],
+    "next_card": "tool/toolset 系统的加载与注册（_execute_tool_calls 内部：工具查找→鉴权→执行→结果回填，agent/conversation_loop.py:5055 进入）",
+    "state_file": "/root/projects/hermes-agent-plus/001study/walkthrough-3-cli-core-loop.md",
+    "rule": "每天最多产 1 份；用户读完/反馈卡点后才推进下一份；篇幅控制 6000 字内；代码片段 ≤30 行；**每一处引用的代码必须标注 文件:行号（如 agent/skill_utils.py:123），调用路径图每步也带行号，方便用户对照源码自己读**"
+  },
+  "last_tick_time": "2026-08-05T15:0X:00+08:00",
+  "notes": "2026-08-05 tick 32（15:0X，白天）：① 走读卡纪律：用户对 walkthrough-3/3.1 仍无反馈（会话历史最新消息是 repo-monitor 修 prompt，与走读卡无关）→ 今天不再产卡，等用户回复思考题。② 新池扫描（08-05T04:00Z 后 99 条，核心相关 5 条）：#79100 length-continuation 计数器不归零（🎯 核心循环，1.2h 被 PR #79153 秒抢，根因本地验证：5083 行注释写 counters 复数只 reset 一个→已写 teach-17）、#79121 vision callable api_key（PR #79150 秒抢）、#79101 api_server 虚拟 model 别名（PR #79102 自报自修）、#79072 intent-driven context assembly（feature，与 prompt 缓存铁律冲突，观察+教学素材）、#79080 delegation collect/ack（feature，观察）。③ 复查：#78144 仍干净（备选池唯一幸存者，updated 停 08-04T03:27Z）；#75130/#78900/#79034/#79035/#79047 均无变化。④ 产出：teach-17-length-continuation-counter.md（计数器生命周期不对称教学，含动手实验与 3 道思考题）。⑤ 下轮（18:00）：等用户对走读卡 3/3.1 反馈；无反馈则继续攒 issue 状态。候选池规律再验证：reporter 自带根因+引用 commit 的 issue 平均 1-1.5h 被抢，feature+needs-decision 无人抢（#79072/#79080 存活）。"
 }

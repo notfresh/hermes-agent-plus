@@ -37,7 +37,7 @@ CLI 终端      Gateway 网关       TUI 界面      桌面应用
 | `agent/prompt_builder.py` | 2,066 | System Prompt 拼装 |
 | `agent/tool_executor.py` | 1,801 | 工具调用调度 |
 | `hermes_state.py` | 7,781 | 状态持久化 |
-| `cli.py` | 15,903 | CLI 入口（兼做很多事情） |
+| `cli.py` | 15,903 | CLI chat 功能 入口（兼做很多事情） |
 
 ---
 
@@ -49,7 +49,7 @@ CLI 终端      Gateway 网关       TUI 界面      桌面应用
 
 **文件：**
 
-- `cli.py` — CLI 模式（`kimi -p "..."` 或交互式 REPL）
+- `cli.py` — Cli Chat模块（`kimi -p "..."` 或交互式 REPL）
 - `gateway/run.py` — 多平台消息网关（Telegram / Discord / 飞书等 20+ 平台）
 - `tui_gateway/` — TUI 界面后端
 - `hermes_cli/` — CLI 子命令（安装、配置、模型切换等）

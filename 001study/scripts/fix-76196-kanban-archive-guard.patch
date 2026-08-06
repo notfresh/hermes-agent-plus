@@ -1,0 +1,103 @@
+diff --git a/hermes_cli/kanban.py b/hermes_cli/kanban.py
+index 4de2f8fb8..3f96631fa 100644
+--- a/hermes_cli/kanban.py
++++ b/hermes_cli/kanban.py
+@@ -2190,7 +2190,13 @@ def _cmd_archive(args: argparse.Namespace) -> int:
+                     print(f"Deleted {tid}")
+             return 0 if not failed else 1
+         for tid in ids:
+-            if not kb.archive_task(conn, tid):
++            try:
++                archived = kb.archive_task(conn, tid)
++            except ValueError as exc:
++                failed.append(tid)
++                print(f"cannot archive {tid}: {exc}", file=sys.stderr)
++                continue
++            if not archived:
+                 failed.append(tid)
+                 print(f"cannot archive {tid}", file=sys.stderr)
+             else:
+diff --git a/hermes_cli/kanban_db.py b/hermes_cli/kanban_db.py
+index de332f36e..76f38a812 100644
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -5541,6 +5541,27 @@ def decompose_triage_task(
+ 
+ def archive_task(conn: sqlite3.Connection, task_id: str) -> bool:
+     with write_txn(conn):
++        # Guard: a running task with a live (non-expired) claim is owned by a
++        # live worker process. Archiving it would silently orphan that worker —
++        # its final complete/block handoff would be dropped because the task
++        # is already archived. Refuse; the user must stop/block the task first
++        # (the dispatcher reclaims stale claims on its own tick).
++        row = conn.execute(
++            "SELECT status, claim_lock, claim_expires FROM tasks WHERE id = ?",
++            (task_id,),
++        ).fetchone()
++        if not row or row["status"] == "archived":
++            return False
++        now = int(time.time())
++        if (
++            row["status"] == "running"
++            and row["claim_lock"] is not None
++            and (row["claim_expires"] is None or row["claim_expires"] > now)
++        ):
++            raise ValueError(
++                f"task {task_id} is running with a live claim "
++                f"(lock={row['claim_lock']}) — stop or block it before archiving"
++            )
+         cur = conn.execute(
+             "UPDATE tasks SET status = 'archived', "
+             "    claim_lock = NULL, claim_expires = NULL, worker_pid = NULL "
+diff --git a/tests/hermes_cli/test_kanban_db.py b/tests/hermes_cli/test_kanban_db.py
+index 25ed72231..e503e62a5 100644
+--- a/tests/hermes_cli/test_kanban_db.py
++++ b/tests/hermes_cli/test_kanban_db.py
+@@ -3343,6 +3343,47 @@ def test_archive_task_triggers_recompute_ready_for_dependents(kanban_home):
+             "parent is archived"
+         )
+ 
++
++def test_archive_refuses_running_task_with_live_claim(kanban_home):
++    """Archiving a task whose worker holds a live claim must be refused.
++
++    Regression for #76196: ``archive_task()`` used to clear ``claim_lock`` /
++    ``worker_pid`` unconditionally, silently orphaning the running worker —
++    its final complete/block handoff was dropped because the task was already
++    archived. The guard must refuse while the claim is live (non-expired) and
++    leave the task untouched.
++    """
++    with kb.connect() as conn:
++        tid = kb.create_task(conn, title="live worker")
++        assert kb.claim_task(conn, tid, claimer="worker-1") is not None
++        assert kb.get_task(conn, tid).status == "running"
++
++        with pytest.raises(ValueError, match="live claim"):
++            kb.archive_task(conn, tid)
++
++        # Nothing was changed: task still running, claim intact.
++        task = kb.get_task(conn, tid)
++        assert task.status == "running"
++        assert task.claim_lock == "worker-1"
++
++
++def test_archive_allows_running_task_with_stale_claim(kanban_home):
++    """A running task whose claim has expired is reclaimable — archiving it
++    is fine because no live worker owns it anymore (the dispatcher would
++    reclaim it on its next tick anyway)."""
++    with kb.connect() as conn:
++        tid = kb.create_task(conn, title="stale claim")
++        assert kb.claim_task(conn, tid, claimer="worker-1") is not None
++        # Force the claim past its expiry, as if the worker vanished.
++        conn.execute(
++            "UPDATE tasks SET claim_expires = ? WHERE id = ?",
++            (int(time.time()) - 60, tid),
++        )
++        conn.commit()
++
++        assert kb.archive_task(conn, tid) is True
++        assert kb.get_task(conn, tid).status == "archived"
++
+ # ---------------------------------------------------------------------------
+ # _add_column_if_missing / _migrate_add_optional_columns idempotency (#21708)
+ # ---------------------------------------------------------------------------

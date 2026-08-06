@@ -8,6 +8,8 @@
 - **本地当前 HEAD**: `3aeded6e3` (最新的 fix/perf/test commit)
 - **Python 文件总数**: 3129 个
 
+其他探索的资料看
+
 ## 巨量文件统计
 
 | 文件 | 行数 | 说明 |
@@ -19,6 +21,7 @@
 | `model_tools.py` | 1,381 | 工具编排与分发 |
 | `batch_runner.py` | 1,321 | 批量轨迹生成 |
 | `trajectory_compressor.py` | 1,574 | 轨迹压缩 |
+
 
 ## 目录结构
 

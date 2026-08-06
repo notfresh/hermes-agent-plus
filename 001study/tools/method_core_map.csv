@@ -1,0 +1,3 @@
+file,line,class,method,is_core,reason
+file,line,class,method,is_core,reason
+hermes_cli/cli_agent_setup_mixin.py,226,CLIAgentSetupMixin,_init_agent,YES,是 Agent 诞生的必经之路，每次对话轮都可能调用
