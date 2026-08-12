@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /root/projects/hermes-agent-plus rev-parse HEAD)",
+      "Bash(python -c \"from conversation_loop import ConversationLoop; print\\('Import OK'\\)\")",
+      "Bash(git -C /root/projects/hermes-agent-plus add minimal-agent-v2/conversation_loop.py)",
+      "Bash(git -C /root/projects/hermes-agent-plus commit -m 'feat: add initial_messages parameter to ConversationLoop.run\\(\\) *)",
+      "Bash(git -C /root/projects/minimal-agent-v2 add conversation_loop.py)",
+      "Bash(git -C /root/projects/minimal-agent-v2 commit -m 'feat: add initial_messages parameter to ConversationLoop.run\\(\\) *)",
+      "Bash(python -c \"from session_manager import SessionManager, Session, run_repl; print\\('Import OK'\\)\")",
+      "Bash(git -C /root/projects/minimal-agent-v2 add session_manager.py)",
+      "Bash(git -C /root/projects/minimal-agent-v2 commit -m 'feat: add session_manager module *)",
+      "Bash(python cli.py --help)",
+      "Bash(git -C /root/projects/minimal-agent-v2 add cli.py)",
+      "Bash(git -C /root/projects/minimal-agent-v2 commit -m \"feat: add -i flag for interactive REPL mode\")",
+      "Bash(python cli.py -i --list-tools)",
+      "Bash(git -C /root/projects/minimal-agent-v2 log --oneline -10)",
+      "Bash(git -C /root/projects/minimal-agent-v2 diff --stat 1529f20..49d8722)",
+      "Bash(git -C /root/projects/minimal-agent-v2 rev-parse 1529f20)"
+    ],
+    "additionalDirectories": [
+      "/root/projects/hermes-agent-plus/minimal-agent-v2",
+      "/root/projects/minimal-agent-v2",
+      "/root/projects/hermes-agent-plus/demo-context-compress",
+      "/root/projects/demo-context-compress"
+    ]
+  }
+}

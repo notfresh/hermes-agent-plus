@@ -266,6 +266,7 @@ def test_make_tui_argv_keeps_desktop_workspace_install_behaviour(
         "--workspace",
         "ui-tui",
         "--include=dev",
+        "--include=optional",
         "--silent",
         "--no-fund",
         "--no-audit",
