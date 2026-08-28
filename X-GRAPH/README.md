@@ -72,14 +72,16 @@ X-GRAPH/
 ## 查询工具
 
 ```bash
-python3 graph_query.py <节点id或关键词> [-l 过滤]
+python3 graph_query.py <节点id或关键词> [-l 过滤] [--explain]
 python3 graph_query.py                          # 缺参：列出可查节点
 python3 graph_query.py mod.agent                # 全层合并查询
 python3 graph_query.py mod.agent -l 1           # 文件层过滤（只看第一层）
 python3 graph_query.py mod.agent -l core        # 架构层过滤（只看 core 层）
+python3 graph_query.py _load_skill_payload --explain   # 关系翻译成人话
 ```
 
 特性：模糊匹配（精确→包含→近似）、缺参自动提示、跨文件引用自动合并。
+输出格式：`path= 文件:行号`（等号后带空格，VSCode 终端 Ctrl+点击可直接跳转）。
 
 ## 更新规范
 

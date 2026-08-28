@@ -52,7 +52,24 @@ def fuzzy_find(nodes, query):
     return difflib.get_close_matches(query, ids, n=5, cutoff=0.4)
 
 
-def show(nid, data, arch=None):
+def explain_edge(e, nodes):
+    """把一条边翻译成中文解释"""
+    f = nodes.get(e["from"], {})
+    t = nodes.get(e["to"], {})
+    rel = e["rel"]
+    if rel == "CONTAINS":
+        return f"{e['from']} 包含 {e['to']} —— {e['to']} 属于 {e['from']}（内聚归属，'它属于谁'）"
+    if rel == "DEPENDS_ON":
+        w = e.get("weight", "?")
+        if f.get("kind") == "module" and t.get("kind") == "module":
+            return f"{e['from']} 依赖 {e['to']} —— 模块级耦合，代码里有 {w} 处 import（'它用到谁'）"
+        return f"{e['from']} 用到 {e['to']} —— {w} 处 import"
+    if rel == "REALIZED_BY":
+        return f"{e['from']} 由 {e['to']} 实现 —— 想研究这个功能，从这里读起"
+    return f"{e['from']} --{rel}--> {e['to']}"
+
+
+def show(nid, data, arch=None, explain=False):
     nodes = {n["id"]: n for n in data["nodes"]}
     edges = data["edges"]
     node = nodes.get(nid)
@@ -88,11 +105,23 @@ def show(nid, data, arch=None):
         d = nodes.get(e["from"], {}).get("desc", "")[:36]
         print(f"  [{e['rel']}] {e['from']} →{w}  {d}{note}")
 
+    if explain:
+        print("\n📖 关系解读（人话版）")
+        if out:
+            print("  出边（它 → 谁，它依赖/包含谁）：")
+            for e in sorted(out, key=lambda e: (e["rel"], e["to"])):
+                print(f"    · {explain_edge(e, nodes)}")
+        if inn:
+            print("  入边（谁 → 它，谁依赖/包含/实现它）：")
+            for e in sorted(inn, key=lambda e: (e["rel"], e["from"])):
+                print(f"    · {explain_edge(e, nodes)}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="X-GRAPH 查询：查看节点第一层外围")
     parser.add_argument("query", nargs="?", help="节点 id 或关键词")
     parser.add_argument("-l", "--layer", help="过滤：数字=文件层(1/2)，或架构层名(core/interface/...)")
+    parser.add_argument("--explain", action="store_true", help="把关系翻译成中文解读（人话版）")
     args = parser.parse_args()
 
     layer_num = args.layer if args.layer and args.layer.isdigit() else None
@@ -128,7 +157,7 @@ def main():
         print(f"未找到匹配: {q}（试试 mod.agent / cluster.agent.adapters / file.agent.model_metadata）")
         return
     for m in matches:
-        show(m, data, arch)
+        show(m, data, arch, args.explain)
 
 
 if __name__ == "__main__":
