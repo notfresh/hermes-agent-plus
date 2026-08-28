@@ -1,0 +1,894 @@
+# ============================================================
+# Layer 1 Graph — Hermes Agent 源码级分布图
+# 格式：TOML（机器可解析）
+# 节点 = 源码实体（模块/文件）；边 = 关系（CONTAINS 内聚 / DEPENDS_ON 耦合）
+# 关系均为实测：import 静态分析（2026-08-28），weight = import 次数
+# ============================================================
+
+[graph]
+name = "Layer 1 Graph - Hermes Agent 源码级分布图"
+layer = 1
+granularity = "源码级（模块 + 文件）"
+created = "2026-08-28"
+schema = "nodes: 实体; edges: CONTAINS(内聚) / DEPENDS_ON(耦合, weight=import次数)"
+note = "核心发现：hermes_cli 被依赖970次为全库最大，是核心底座而非CLI薄壳；agent/tools/hermes_cli 三巨头强耦合"
+note2 = "覆盖范围修正(2026-08-28)：补入前端应用层 apps/(Electron桌面)、ui-tui/(TUI前端)、web/(Web前端)——多语言源码，非Python。它们与后端经 IPC/API 协议连接(非 import)，连接关系待第二层验证，暂不建 DEPENDS_ON 边"
+note3 = "暂不入图：scripts/(CI运维脚本)、optional-skills/(技能包内容)、optional-mcps/(yaml配置)、docker/nix/packaging/(构建配置)、docs/website/(文档)"
+
+# ------------------------------------------------------------
+# 节点：模块（12）
+# 分层：core=核心簇 / capability=能力层 / interface=平台接口 / application=前端应用 / entry=进程入口 / infra=基础设施
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 mod.hermes_cli: 全库最大被依赖方(入度970)：核心底座，含配置/会话等共享逻辑，名不副实的CLI壳
+id = 'mod.hermes_cli'
+kind = 'module'
+path = 'hermes_cli/'
+layer = 'core'
+files = 206
+lines = 171836
+expanded = false
+desc = '全库最大被依赖方(入度970)：核心底座，含配置/会话等共享逻辑，名不副实的CLI壳'
+
+[[nodes]]  # 节点 mod.agent: agent 核心：循环、上下文、会话；平铺结构，隐式簇见 cluster.agent.*
+id = 'mod.agent'
+kind = 'module'
+path = 'agent/'
+layer = 'core'
+files = 156
+lines = 102275
+expanded = true
+desc = 'agent 核心：循环、上下文、会话；平铺结构，隐式簇见 cluster.agent.*'
+
+[[nodes]]  # 节点 mod.tools: 内置工具集（终端/文件/网络等），被核心簇大量消费
+id = 'mod.tools'
+kind = 'module'
+path = 'tools/'
+layer = 'core'
+files = 114
+lines = 97549
+expanded = false
+desc = '内置工具集（终端/文件/网络等），被核心簇大量消费'
+
+[[nodes]]  # 节点 mod.gateway: 消息网关：多平台收发与路由
+id = 'mod.gateway'
+kind = 'module'
+path = 'gateway/'
+layer = 'interface'
+files = 77
+lines = 84499
+expanded = false
+desc = '消息网关：多平台收发与路由'
+
+[[nodes]]  # 节点 mod.plugins: 内置插件（hook 扩展），重度消费核心+网关
+id = 'mod.plugins'
+kind = 'module'
+path = 'plugins/'
+layer = 'capability'
+files = 187
+lines = 110192
+expanded = false
+desc = '内置插件（hook 扩展），重度消费核心+网关'
+
+[[nodes]]  # 节点 mod.cron: 定时任务调度系统
+id = 'mod.cron'
+kind = 'module'
+path = 'cron/'
+layer = 'capability'
+files = 11
+lines = 8519
+expanded = true
+desc = '定时任务调度系统'
+
+[[nodes]]  # 节点 mod.tui_gateway: TUI 网关
+id = 'mod.tui_gateway'
+kind = 'module'
+path = 'tui_gateway/'
+layer = 'interface'
+files = 14
+lines = 19669
+expanded = false
+desc = 'TUI 网关'
+
+[[nodes]]  # 节点 mod.acp_adapter: ACP 协议适配（叶子消费者）
+id = 'mod.acp_adapter'
+kind = 'module'
+path = 'acp_adapter/'
+layer = 'interface'
+files = 11
+lines = 5373
+expanded = false
+desc = 'ACP 协议适配（叶子消费者）'
+
+[[nodes]]  # 节点 mod.providers: 模型提供商适配（壳），被 agent/plugins 广泛依赖
+id = 'mod.providers'
+kind = 'module'
+path = 'providers/'
+layer = 'capability'
+files = 2
+lines = 423
+expanded = false
+desc = '模型提供商适配（壳），被 agent/plugins 广泛依赖'
+
+[[nodes]]  # 节点 mod.apps: Electron 桌面应用（React + TS + Rust 混编，全库最大前端）
+id = 'mod.apps'
+kind = 'module'
+path = 'apps/'
+layer = 'application'
+lang = 'typescript'
+files = 1014
+lines = 0
+expanded = false
+desc = 'Electron 桌面应用（React + TS + Rust 混编，全库最大前端）'
+
+[[nodes]]  # 节点 mod.ui_tui: TUI 前端（对应 tui_gateway 的界面层）
+id = 'mod.ui_tui'
+kind = 'module'
+path = 'ui-tui/'
+layer = 'application'
+lang = 'typescript'
+files = 382
+lines = 0
+expanded = false
+desc = 'TUI 前端（对应 tui_gateway 的界面层）'
+
+[[nodes]]  # 节点 mod.web: Web 前端
+id = 'mod.web'
+kind = 'module'
+path = 'web/'
+layer = 'application'
+lang = 'typescript'
+files = 133
+lines = 0
+expanded = false
+desc = 'Web 前端'
+
+[[nodes]]  # 节点 file.cli: CLI 进程入口
+id = 'file.cli'
+kind = 'file'
+path = 'cli.py'
+layer = 'entry'
+desc = 'CLI 进程入口'
+
+[[nodes]]  # 节点 file.run_agent: agent 运行入口，驱动核心循环
+id = 'file.run_agent'
+kind = 'file'
+path = 'run_agent.py'
+layer = 'entry'
+desc = 'agent 运行入口，驱动核心循环'
+
+[[nodes]]  # 节点 file.batch_runner: 批处理运行器
+id = 'file.batch_runner'
+kind = 'file'
+path = 'batch_runner.py'
+layer = 'entry'
+desc = '批处理运行器'
+
+[[nodes]]  # 节点 file.mcp_serve: MCP 服务入口
+id = 'file.mcp_serve'
+kind = 'file'
+path = 'mcp_serve.py'
+layer = 'entry'
+desc = 'MCP 服务入口'
+
+[[nodes]]  # 节点 file.mini_swe_runner: mini SWE 运行器
+id = 'file.mini_swe_runner'
+kind = 'file'
+path = 'mini_swe_runner.py'
+layer = 'entry'
+desc = 'mini SWE 运行器'
+
+[[nodes]]  # 节点 file.model_tools: 模型内置工具（随每次 API 调用发送的 core tools）
+id = 'file.model_tools'
+kind = 'file'
+path = 'model_tools.py'
+layer = 'core'
+desc = '模型内置工具（随每次 API 调用发送的 core tools）'
+
+[[nodes]]  # 节点 file.toolsets: 工具集定义/装配
+id = 'file.toolsets'
+kind = 'file'
+path = 'toolsets.py'
+layer = 'core'
+desc = '工具集定义/装配'
+
+[[nodes]]  # 节点 file.toolset_distributions: 工具集按平台分布配置
+id = 'file.toolset_distributions'
+kind = 'file'
+path = 'toolset_distributions.py'
+layer = 'core'
+desc = '工具集按平台分布配置'
+
+[[nodes]]  # 节点 file.trajectory_compressor: 对话轨迹压缩（上下文管理）
+id = 'file.trajectory_compressor'
+kind = 'file'
+path = 'trajectory_compressor.py'
+layer = 'core'
+desc = '对话轨迹压缩（上下文管理）'
+
+[[nodes]]  # 节点 file.hermes_state: agent 状态
+id = 'file.hermes_state'
+kind = 'file'
+path = 'hermes_state.py'
+layer = 'core'
+desc = 'agent 状态'
+
+[[nodes]]  # 节点 file.hermes_constants: 共享常量
+id = 'file.hermes_constants'
+kind = 'file'
+path = 'hermes_constants.py'
+layer = 'infra'
+desc = '共享常量'
+
+[[nodes]]  # 节点 file.hermes_logging: 集中日志
+id = 'file.hermes_logging'
+kind = 'file'
+path = 'hermes_logging.py'
+layer = 'infra'
+desc = '集中日志'
+
+[[nodes]]  # 节点 file.hermes_time: 时间工具
+id = 'file.hermes_time'
+kind = 'file'
+path = 'hermes_time.py'
+layer = 'infra'
+desc = '时间工具'
+
+[[nodes]]  # 节点 file.hermes_bootstrap: Windows UTF-8 引导
+id = 'file.hermes_bootstrap'
+kind = 'file'
+path = 'hermes_bootstrap.py'
+layer = 'infra'
+desc = 'Windows UTF-8 引导'
+
+[[nodes]]  # 节点 file.utils: 共享工具函数
+id = 'file.utils'
+kind = 'file'
+path = 'utils.py'
+layer = 'infra'
+desc = '共享工具函数'
+
+[[nodes]]  # 节点 file.setup: 构建脚本
+id = 'file.setup'
+kind = 'file'
+path = 'setup.py'
+layer = 'infra'
+desc = '构建脚本'
+
+[[nodes]]  # 节点 file.cron.__init__: 包出口：暴露 jobs + scheduler
+id = 'file.cron.__init__'
+kind = 'file'
+path = 'cron/__init__.py'
+desc = '包出口：暴露 jobs + scheduler'
+
+[[nodes]]  # 节点 file.cron.jobs: 任务存储与管理
+id = 'file.cron.jobs'
+kind = 'file'
+path = 'cron/jobs.py'
+lines = 2382
+desc = '任务存储与管理'
+
+[[nodes]]  # 节点 file.cron.scheduler: 调度器核心：到期任务执行（本模块最大）
+id = 'file.cron.scheduler'
+kind = 'file'
+path = 'cron/scheduler.py'
+lines = 4153
+desc = '调度器核心：到期任务执行（本模块最大）'
+
+[[nodes]]  # 节点 file.cron.scheduler_provider: 调度器提供者接口（trigger 抽象）
+id = 'file.cron.scheduler_provider'
+kind = 'file'
+path = 'cron/scheduler_provider.py'
+lines = 219
+desc = '调度器提供者接口（trigger 抽象）'
+
+[[nodes]]  # 节点 file.cron.executions: 执行审计账本（profile 本地持久化）
+id = 'file.cron.executions'
+kind = 'file'
+path = 'cron/executions.py'
+lines = 228
+desc = '执行审计账本（profile 本地持久化）'
+
+[[nodes]]  # 节点 file.cron.lifecycle_guard: 网关生命周期守卫
+id = 'file.cron.lifecycle_guard'
+kind = 'file'
+path = 'cron/lifecycle_guard.py'
+lines = 141
+desc = '网关生命周期守卫'
+
+[[nodes]]  # 节点 file.cron.suggestions: 建议任务（一键接受）
+id = 'file.cron.suggestions'
+kind = 'file'
+path = 'cron/suggestions.py'
+lines = 260
+desc = '建议任务（一键接受）'
+
+[[nodes]]  # 节点 file.cron.suggestion_catalog: 建议任务目录（starter 合集）
+id = 'file.cron.suggestion_catalog'
+kind = 'file'
+path = 'cron/suggestion_catalog.py'
+lines = 154
+desc = '建议任务目录（starter 合集）'
+
+[[nodes]]  # 节点 file.cron.blueprint_catalog: 自动化蓝图：带类型槽位的参数化蓝图
+id = 'file.cron.blueprint_catalog'
+kind = 'file'
+path = 'cron/blueprint_catalog.py'
+lines = 713
+desc = '自动化蓝图：带类型槽位的参数化蓝图'
+
+[[nodes]]  # 节点 file.cron.scripts.classify: 独立运维脚本
+id = 'file.cron.scripts.classify'
+kind = 'file'
+path = 'cron/scripts/classify_items.py'
+desc = '独立运维脚本'
+
+[[nodes]]  # 节点 file.cron.scripts.__init__: 脚本包子声明
+id = 'file.cron.scripts.__init__'
+kind = 'file'
+path = 'cron/scripts/__init__.py'
+desc = '脚本包子声明'
+
+[[edges]]
+from = 'mod.cron'
+to = 'file.cron.__init__'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'mod.cron'
+to = 'file.cron.jobs'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'mod.cron'
+to = 'file.cron.scheduler'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'mod.cron'
+to = 'file.cron.scheduler_provider'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'mod.cron'
+to = 'file.cron.executions'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'mod.cron'
+to = 'file.cron.lifecycle_guard'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'mod.cron'
+to = 'file.cron.suggestions'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'mod.cron'
+to = 'file.cron.suggestion_catalog'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'mod.cron'
+to = 'file.cron.blueprint_catalog'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'mod.cron'
+to = 'file.cron.scripts.classify'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'mod.cron'
+to = 'file.cron.scripts.__init__'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'mod.hermes_cli'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 243
+desc = '强耦合核心簇'
+
+[[edges]]
+from = 'mod.hermes_cli'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 156
+desc = '强耦合核心簇'
+
+[[edges]]
+from = 'mod.hermes_cli'
+to = 'mod.gateway'
+rel = 'DEPENDS_ON'
+weight = 89
+
+[[edges]]
+from = 'mod.hermes_cli'
+to = 'mod.cron'
+rel = 'DEPENDS_ON'
+weight = 28
+
+[[edges]]
+from = 'mod.hermes_cli'
+to = 'mod.plugins'
+rel = 'DEPENDS_ON'
+weight = 23
+
+[[edges]]
+from = 'mod.hermes_cli'
+to = 'mod.providers'
+rel = 'DEPENDS_ON'
+weight = 9
+
+[[edges]]
+from = 'mod.hermes_cli'
+to = 'mod.tui_gateway'
+rel = 'DEPENDS_ON'
+weight = 2
+
+[[edges]]
+from = 'mod.hermes_cli'
+to = 'mod.acp_adapter'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'mod.agent'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 188
+desc = '强耦合核心簇'
+
+[[edges]]
+from = 'mod.agent'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 81
+
+[[edges]]
+from = 'mod.agent'
+to = 'mod.providers'
+rel = 'DEPENDS_ON'
+weight = 14
+
+[[edges]]
+from = 'mod.agent'
+to = 'mod.gateway'
+rel = 'DEPENDS_ON'
+weight = 7
+
+[[edges]]
+from = 'mod.agent'
+to = 'mod.cron'
+rel = 'DEPENDS_ON'
+weight = 3
+
+[[edges]]
+from = 'mod.agent'
+to = 'mod.plugins'
+rel = 'DEPENDS_ON'
+weight = 2
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 142
+desc = '强耦合核心簇'
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 123
+desc = '强耦合核心簇'
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.gateway'
+rel = 'DEPENDS_ON'
+weight = 67
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.plugins'
+rel = 'DEPENDS_ON'
+weight = 18
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.cron'
+rel = 'DEPENDS_ON'
+weight = 8
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.providers'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'mod.gateway'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 160
+
+[[edges]]
+from = 'mod.gateway'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 84
+
+[[edges]]
+from = 'mod.gateway'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 82
+
+[[edges]]
+from = 'mod.gateway'
+to = 'mod.cron'
+rel = 'DEPENDS_ON'
+weight = 8
+
+[[edges]]
+from = 'mod.gateway'
+to = 'mod.plugins'
+rel = 'DEPENDS_ON'
+weight = 3
+
+[[edges]]
+from = 'mod.cron'
+to = 'mod.gateway'
+rel = 'DEPENDS_ON'
+weight = 18
+
+[[edges]]
+from = 'mod.cron'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 18
+
+[[edges]]
+from = 'mod.cron'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 11
+
+[[edges]]
+from = 'mod.cron'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 9
+
+[[edges]]
+from = 'mod.cron'
+to = 'mod.plugins'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'mod.plugins'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 167
+
+[[edges]]
+from = 'mod.plugins'
+to = 'mod.gateway'
+rel = 'DEPENDS_ON'
+weight = 133
+
+[[edges]]
+from = 'mod.plugins'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 115
+
+[[edges]]
+from = 'mod.plugins'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 71
+
+[[edges]]
+from = 'mod.plugins'
+to = 'mod.providers'
+rel = 'DEPENDS_ON'
+weight = 64
+
+[[edges]]
+from = 'mod.plugins'
+to = 'mod.cron'
+rel = 'DEPENDS_ON'
+weight = 5
+
+[[edges]]
+from = 'mod.tui_gateway'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 127
+
+[[edges]]
+from = 'mod.tui_gateway'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 81
+
+[[edges]]
+from = 'mod.tui_gateway'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 51
+
+[[edges]]
+from = 'mod.tui_gateway'
+to = 'mod.gateway'
+rel = 'DEPENDS_ON'
+weight = 5
+
+[[edges]]
+from = 'mod.acp_adapter'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 12
+
+[[edges]]
+from = 'mod.acp_adapter'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 10
+
+[[edges]]
+from = 'mod.acp_adapter'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 8
+
+[[edges]]
+from = 'mod.acp_adapter'
+to = 'mod.gateway'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'mod.providers'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 2
+
+[[edges]]
+from = 'file.cli'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 117
+
+[[edges]]
+from = 'file.cli'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 50
+
+[[edges]]
+from = 'file.cli'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 36
+
+[[edges]]
+from = 'file.cli'
+to = 'mod.gateway'
+rel = 'DEPENDS_ON'
+weight = 4
+
+[[edges]]
+from = 'file.cli'
+to = 'mod.cron'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'file.run_agent'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 102
+
+[[edges]]
+from = 'file.run_agent'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 24
+
+[[edges]]
+from = 'file.run_agent'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 10
+
+[[edges]]
+from = 'file.run_agent'
+to = 'mod.providers'
+rel = 'DEPENDS_ON'
+weight = 2
+
+[[edges]]
+from = 'file.run_agent'
+to = 'mod.gateway'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'file.model_tools'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 9
+
+[[edges]]
+from = 'file.model_tools'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 8
+
+[[edges]]
+from = 'file.model_tools'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'file.model_tools'
+to = 'mod.acp_adapter'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'file.toolsets'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 4
+
+[[edges]]
+from = 'file.toolsets'
+to = 'mod.gateway'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'file.trajectory_compressor'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 7
+
+[[edges]]
+from = 'file.trajectory_compressor'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'file.hermes_state'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 3
+
+[[edges]]
+from = 'file.hermes_logging'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 2
+
+[[edges]]
+from = 'file.hermes_logging'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 2
+
+[[edges]]
+from = 'file.hermes_constants'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 2
+
+[[edges]]
+from = 'file.hermes_time'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 2
+
+[[edges]]
+from = 'file.batch_runner'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'file.mcp_serve'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'file.mini_swe_runner'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 3
+
+[[edges]]
+from = 'file.mini_swe_runner'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 3
+
+[[edges]]
+from = 'file.hermes_bootstrap'
+to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'file.cron.__init__'
+to = 'file.cron.jobs'
+rel = 'DEPENDS_ON'
+
+[[edges]]
+from = 'file.cron.__init__'
+to = 'file.cron.scheduler'
+rel = 'DEPENDS_ON'
+
+[[edges]]
+from = 'file.cron.jobs'
+to = 'file.cron.executions'
+rel = 'DEPENDS_ON'
+
+[[edges]]
+from = 'file.cron.jobs'
+to = 'file.cron.lifecycle_guard'
+rel = 'DEPENDS_ON'
+
+[[edges]]
+from = 'file.cron.jobs'
+to = 'file.cron.scheduler'
+rel = 'DEPENDS_ON'
+note = '循环依赖：scheduler 也 import jobs，存储与执行耦合紧'
+
+[[edges]]
+from = 'file.cron.scheduler_provider'
+to = 'file.cron.executions'
+rel = 'DEPENDS_ON'
+
+[[edges]]
+from = 'file.cron.scheduler_provider'
+to = 'file.cron.jobs'
+rel = 'DEPENDS_ON'
+
+[[edges]]
+from = 'file.cron.scheduler_provider'
+to = 'file.cron.scheduler'
+rel = 'DEPENDS_ON'
+
+[[edges]]
+from = 'file.cron.scheduler'
+to = 'file.cron.executions'
+rel = 'DEPENDS_ON'
+
+[[edges]]
+from = 'file.cron.scheduler'
+to = 'file.cron.jobs'
+rel = 'DEPENDS_ON'
+
+[[edges]]
+from = 'file.cron.scheduler'
+to = 'file.cron.scheduler_provider'
+rel = 'DEPENDS_ON'
+
+[[edges]]
+from = 'file.cron.suggestions'
+to = 'file.cron.jobs'
+rel = 'DEPENDS_ON'
+
+[[edges]]
+from = 'file.cron.suggestion_catalog'
+to = 'file.cron.suggestions'
+rel = 'DEPENDS_ON'

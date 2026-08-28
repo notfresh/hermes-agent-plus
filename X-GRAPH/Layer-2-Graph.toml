@@ -1,0 +1,352 @@
+# ============================================================
+# Layer 2 Graph — agent 模块（隐式簇展开）
+# 格式：TOML（机器可解析）
+# 说明：第一层图的第二层分卷。agent/ 平铺 156 文件，簇靠命名+依赖网维系。
+#       本文件：4 个隐式簇（cluster.agent.*）+ 已识别成员文件 + 簇间实测依赖
+# 更新：2026-08-28
+# ============================================================
+
+[graph]
+name = "Layer 2 Graph - agent 模块隐式簇展开"
+layer = 2
+granularity = "簇级 + 文件级（agent 模块内部）"
+created = "2026-08-28"
+parent = "Layer-1-Graph.toml"
+
+[[nodes]]  # 节点 cluster.agent.adapters: 适配器簇：anthropic/bedrock/codex_responses/gemini_native
+id = 'cluster.agent.adapters'
+kind = 'cluster'
+path = 'agent/'
+layer = 'core'
+expanded = false
+desc = '适配器簇：anthropic/bedrock/codex_responses/gemini_native/vertex/azure_identity，各对接一家厂商，平行结构；anthropic⇄bedrock互相纠缠'
+
+[[nodes]]  # 节点 cluster.agent.shared_base: 共享底座：model_metadata(被13文件引用)/usage_pricing/turn_cont
+id = 'cluster.agent.shared_base'
+kind = 'cluster'
+path = 'agent/'
+layer = 'core'
+expanded = false
+desc = '共享底座：model_metadata(被13文件引用)/usage_pricing/turn_context/message_content/auxiliary_client，被全模块引用'
+
+[[nodes]]  # 节点 cluster.agent.credentials: 凭证簇：credential_pool + secret_sources/ 子包（base/bitwar
+id = 'cluster.agent.credentials'
+kind = 'cluster'
+path = 'agent/'
+layer = 'core'
+expanded = false
+desc = '凭证簇：credential_pool + secret_sources/ 子包（base/bitwarden/onepassword/registry）'
+
+[[nodes]]  # 节点 cluster.agent.prompt_safety: 提示词安全簇：prompt_builder(被8引用)/redact(脱敏)/conversation_
+id = 'cluster.agent.prompt_safety'
+kind = 'cluster'
+path = 'agent/'
+layer = 'core'
+expanded = false
+desc = '提示词安全簇：prompt_builder(被8引用)/redact(脱敏)/conversation_compression(压缩)'
+
+[[nodes]]  # 节点 file.agent.anthropic_adapter: Anthropic 适配器；依赖 credential_pool/bedrock_adapter
+id = 'file.agent.anthropic_adapter'
+kind = 'file'
+path = 'agent/anthropic_adapter.py'
+layer = 'core'
+desc = 'Anthropic 适配器；依赖 credential_pool/bedrock_adapter'
+
+[[nodes]]  # 节点 file.agent.bedrock_adapter: AWS Bedrock 适配器；与 anthropic_adapter 互相依赖（纠缠）
+id = 'file.agent.bedrock_adapter'
+kind = 'file'
+path = 'agent/bedrock_adapter.py'
+layer = 'core'
+desc = 'AWS Bedrock 适配器；与 anthropic_adapter 互相依赖（纠缠）'
+
+[[nodes]]  # 节点 file.agent.codex_responses_adapter: Codex 响应适配；依赖 prompt_builder
+id = 'file.agent.codex_responses_adapter'
+kind = 'file'
+path = 'agent/codex_responses_adapter.py'
+layer = 'core'
+desc = 'Codex 响应适配；依赖 prompt_builder'
+
+[[nodes]]  # 节点 file.agent.gemini_native_adapter: Gemini 适配器；依赖 gemini_schema/bounded_response
+id = 'file.agent.gemini_native_adapter'
+kind = 'file'
+path = 'agent/gemini_native_adapter.py'
+layer = 'core'
+desc = 'Gemini 适配器；依赖 gemini_schema/bounded_response'
+
+[[nodes]]  # 节点 file.agent.vertex_adapter: Google Vertex 适配器
+id = 'file.agent.vertex_adapter'
+kind = 'file'
+path = 'agent/vertex_adapter.py'
+layer = 'core'
+desc = 'Google Vertex 适配器'
+
+[[nodes]]  # 节点 file.agent.azure_identity_adapter: Azure 身份适配器；被 anthropic_adapter 依赖
+id = 'file.agent.azure_identity_adapter'
+kind = 'file'
+path = 'agent/azure_identity_adapter.py'
+layer = 'core'
+desc = 'Azure 身份适配器；被 anthropic_adapter 依赖'
+
+[[nodes]]  # 节点 file.agent.model_metadata: 模型元数据；被13个文件引用，agent 内聚黏合剂之首
+id = 'file.agent.model_metadata'
+kind = 'file'
+path = 'agent/model_metadata.py'
+layer = 'core'
+desc = '模型元数据；被13个文件引用，agent 内聚黏合剂之首'
+
+[[nodes]]  # 节点 file.agent.usage_pricing: token 用量/计价；被5个文件引用
+id = 'file.agent.usage_pricing'
+kind = 'file'
+path = 'agent/usage_pricing.py'
+layer = 'core'
+desc = 'token 用量/计价；被5个文件引用'
+
+[[nodes]]  # 节点 file.agent.turn_context: 对话回合上下文；被5个文件引用
+id = 'file.agent.turn_context'
+kind = 'file'
+path = 'agent/turn_context.py'
+layer = 'core'
+desc = '对话回合上下文；被5个文件引用'
+
+[[nodes]]  # 节点 file.agent.message_content: 消息内容结构；被4个文件引用
+id = 'file.agent.message_content'
+kind = 'file'
+path = 'agent/message_content.py'
+layer = 'core'
+desc = '消息内容结构；被4个文件引用'
+
+[[nodes]]  # 节点 file.agent.auxiliary_client: 辅助客户端；被11个文件引用（第二公共件）
+id = 'file.agent.auxiliary_client'
+kind = 'file'
+path = 'agent/auxiliary_client.py'
+layer = 'core'
+desc = '辅助客户端；被11个文件引用（第二公共件）'
+
+[[nodes]]  # 节点 file.agent.credential_pool: 凭证池；被6个文件引用，同时被适配器簇依赖
+id = 'file.agent.credential_pool'
+kind = 'file'
+path = 'agent/credential_pool.py'
+layer = 'core'
+desc = '凭证池；被6个文件引用，同时被适配器簇依赖'
+
+[[nodes]]  # 节点 file.agent.secret_sources: 密钥源子包：base基类+bitwarden/onepassword实现+registry注册
+id = 'file.agent.secret_sources'
+kind = 'subpackage'
+path = 'agent/secret_sources/'
+layer = 'core'
+desc = '密钥源子包：base基类+bitwarden/onepassword实现+registry注册'
+
+[[nodes]]  # 节点 file.agent.prompt_builder: 提示词构建；被8个文件引用
+id = 'file.agent.prompt_builder'
+kind = 'file'
+path = 'agent/prompt_builder.py'
+layer = 'core'
+desc = '提示词构建；被8个文件引用'
+
+[[nodes]]  # 节点 file.agent.redact: 敏感信息脱敏；被8个文件引用
+id = 'file.agent.redact'
+kind = 'file'
+path = 'agent/redact.py'
+layer = 'core'
+desc = '敏感信息脱敏；被8个文件引用'
+
+[[nodes]]  # 节点 file.agent.conversation_compression: 对话压缩；被4个文件引用
+id = 'file.agent.conversation_compression'
+kind = 'file'
+path = 'agent/conversation_compression.py'
+layer = 'core'
+desc = '对话压缩；被4个文件引用'
+
+[[edges]]
+from = 'mod.agent'
+to = 'cluster.agent.adapters'
+rel = 'CONTAINS'
+note = '隐式簇：靠命名模式(*_adapter)+依赖网聚类，目录未体现'
+
+[[edges]]
+from = 'mod.agent'
+to = 'cluster.agent.shared_base'
+rel = 'CONTAINS'
+note = '隐式簇'
+
+[[edges]]
+from = 'mod.agent'
+to = 'cluster.agent.credentials'
+rel = 'CONTAINS'
+note = '隐式簇'
+
+[[edges]]
+from = 'mod.agent'
+to = 'cluster.agent.prompt_safety'
+rel = 'CONTAINS'
+note = '隐式簇'
+
+[[edges]]
+from = 'cluster.agent.adapters'
+to = 'file.agent.anthropic_adapter'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.adapters'
+to = 'file.agent.bedrock_adapter'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.adapters'
+to = 'file.agent.codex_responses_adapter'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.adapters'
+to = 'file.agent.gemini_native_adapter'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.adapters'
+to = 'file.agent.vertex_adapter'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.adapters'
+to = 'file.agent.azure_identity_adapter'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.shared_base'
+to = 'file.agent.model_metadata'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.shared_base'
+to = 'file.agent.usage_pricing'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.shared_base'
+to = 'file.agent.turn_context'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.shared_base'
+to = 'file.agent.message_content'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.shared_base'
+to = 'file.agent.auxiliary_client'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.credentials'
+to = 'file.agent.credential_pool'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.credentials'
+to = 'file.agent.secret_sources'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.prompt_safety'
+to = 'file.agent.prompt_builder'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.prompt_safety'
+to = 'file.agent.redact'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.prompt_safety'
+to = 'file.agent.conversation_compression'
+rel = 'CONTAINS'
+
+[[edges]]
+from = 'cluster.agent.adapters'
+to = 'cluster.agent.shared_base'
+rel = 'DEPENDS_ON'
+note = '实测：adapter 引用 model_metadata/usage_pricing'
+
+[[edges]]
+from = 'cluster.agent.adapters'
+to = 'cluster.agent.credentials'
+rel = 'DEPENDS_ON'
+note = '实测：anthropic_adapter→credential_pool'
+[[nodes]]  # 节点 file.agent.transports: 传输层子包（11文件）；transports.types 被6文件引用
+id = 'file.agent.transports'
+kind = 'subpackage'
+path = 'agent/transports/'
+layer = 'core'
+desc = '传输层子包（11文件）；transports.types 被6文件引用'
+
+[[nodes]]  # 节点 file.agent.agent_runtime_helpers: 运行时助手；被6个文件引用
+id = 'file.agent.agent_runtime_helpers'
+kind = 'file'
+path = 'agent/agent_runtime_helpers.py'
+layer = 'core'
+desc = '运行时助手；被6个文件引用'
+
+[[nodes]]  # 节点 file.agent.skill_utils: 技能工具；被5个文件引用
+id = 'file.agent.skill_utils'
+kind = 'file'
+path = 'agent/skill_utils.py'
+layer = 'core'
+desc = '技能工具；被5个文件引用'
+
+[[nodes]]  # 节点 file.agent.tool_result_classification: 工具结果分类；被4个文件引用
+id = 'file.agent.tool_result_classification'
+kind = 'file'
+path = 'agent/tool_result_classification.py'
+layer = 'core'
+desc = '工具结果分类；被4个文件引用'
+
+[[nodes]]  # 节点 file.agent.error_classifier: 错误分类；被4个文件引用
+id = 'file.agent.error_classifier'
+kind = 'file'
+path = 'agent/error_classifier.py'
+layer = 'core'
+desc = '错误分类；被4个文件引用'
+
+[[nodes]]  # 节点 file.agent.runtime_cwd: 运行时工作目录；被4个文件引用
+id = 'file.agent.runtime_cwd'
+kind = 'file'
+path = 'agent/runtime_cwd.py'
+layer = 'core'
+desc = '运行时工作目录；被4个文件引用'
+
+[[edges]]
+from = 'mod.agent'
+to = 'file.agent.transports'
+rel = 'CONTAINS'
+note = '真实子目录'
+
+[[edges]]
+from = 'mod.agent'
+to = 'file.agent.agent_runtime_helpers'
+rel = 'CONTAINS'
+note = '平铺文件未归簇'
+
+[[edges]]
+from = 'mod.agent'
+to = 'file.agent.skill_utils'
+rel = 'CONTAINS'
+note = '平铺文件未归簇'
+
+[[edges]]
+from = 'mod.agent'
+to = 'file.agent.tool_result_classification'
+rel = 'CONTAINS'
+note = '平铺文件未归簇'
+
+[[edges]]
+from = 'mod.agent'
+to = 'file.agent.error_classifier'
+rel = 'CONTAINS'
+note = '平铺文件未归簇'
+
+[[edges]]
+from = 'mod.agent'
+to = 'file.agent.runtime_cwd'
+rel = 'CONTAINS'
+note = '平铺文件未归簇'
+

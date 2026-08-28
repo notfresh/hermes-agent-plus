@@ -1,0 +1,391 @@
+# ============================================================
+# Layer 3 Graph — skill-load 功能链
+# 格式：TOML（机器可解析）
+# 粒度：功能级（feature + function）
+# 说明：功能是横切多个模块的（tools/ + agent/），第二层的 cluster 表达不了，
+#       必须靠第三层：feature → REALIZED_BY → 文件::函数:行号
+# 更新：2026-08-28
+# ============================================================
+
+[graph]
+name = "Layer 3 Graph - skill-load 功能链"
+layer = 3
+granularity = "功能级（feature + function）"
+created = "2026-08-28"
+note = "REALIZED_BY 边均为扫描+确认的事实；函数级 CALLS 调用关系未实测，待补"
+
+# ------------------------------------------------------------
+# 功能节点
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 feature.skill-load: 技能加载功能（横切 tools/ + agent/）
+id = "feature.skill-load"
+kind = "feature"
+desc = "技能加载：命令解析 → 技能发现 → 载荷加载 → 预处理 → 安全检查；横切 agent/skill_commands + tools/skills_tool 等"
+note = "skills_list/skill_view 属展示功能，待建 feature.skill-view"
+known_issues = "#84667 cron路径skill_view preprocess默认True导致加载失败(两路径参数分叉); #75130 skill_manager_tool用rglob漏symlink技能(iter_skill_index_files已统一,修复点)"
+
+# ------------------------------------------------------------
+# 文件节点（挂到模块下）
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 file.tools.skills_tool: 技能工具主入口（agent 的技能界面）
+id = "file.tools.skills_tool"
+kind = "file"
+path = "tools/skills_tool.py"
+layer = "core"
+desc = "技能工具：列表/查看/就绪检查，agent 调用技能的入口"
+
+[[nodes]]  # 节点 file.tools.skills_hub: 技能市场/仓库
+id = "file.tools.skills_hub"
+kind = "file"
+path = "tools/skills_hub.py"
+layer = "core"
+desc = "技能市场：SkillMeta/SkillBundle 数据结构，hub 安装管理"
+
+[[nodes]]  # 节点 file.tools.skills_guard: 技能安全检查
+id = "file.tools.skills_guard"
+kind = "file"
+path = "tools/skills_guard.py"
+layer = "core"
+desc = "技能安全扫描：安装前检查、内容哈希"
+
+[[nodes]]  # 节点 file.agent.skill_commands: 技能命令解析（agent 侧核心）
+id = "file.agent.skill_commands"
+kind = "file"
+path = "agent/skill_commands.py"
+layer = "core"
+desc = "技能命令：解析/加载载荷/重载"
+
+[[nodes]]  # 节点 file.agent.skill_bundles: 技能包
+id = "file.agent.skill_bundles"
+kind = "file"
+path = "agent/skill_bundles.py"
+layer = "core"
+desc = "技能包：bundle 扫描与加载"
+
+[[nodes]]  # 节点 file.agent.skill_preprocessing: 技能预处理
+id = "file.agent.skill_preprocessing"
+kind = "file"
+path = "agent/skill_preprocessing.py"
+layer = "core"
+desc = "技能预处理：配置加载、模板变量替换、内联 shell 展开"
+
+# ------------------------------------------------------------
+# 函数节点（16 个，文件::函数:行号）
+# ------------------------------------------------------------
+
+# --- agent/skill_commands.py ---
+
+[[nodes]]  # 节点 func.agent.skill_commands._load_skill_payload: 核心！加载技能载荷
+id = "func.agent.skill_commands._load_skill_payload"
+kind = "function"
+path = "agent/skill_commands.py:138"
+desc = "加载技能载荷（skill 内容+元数据），skill-load 链路核心"
+
+[[nodes]]  # 节点 func.agent.skill_commands.scan_skill_commands: 扫描可用技能命令
+id = "func.agent.skill_commands.scan_skill_commands"
+kind = "function"
+path = "agent/skill_commands.py:320"
+desc = "扫描全部技能命令（发现阶段入口）"
+
+[[nodes]]  # 节点 func.agent.skill_commands.reload_skills: 热重载技能
+id = "func.agent.skill_commands.reload_skills"
+kind = "function"
+path = "agent/skill_commands.py:431"
+desc = "重载技能命令（改技能后热更新）"
+
+[[nodes]]  # 节点 func.agent.skill_commands.resolve_skill_command_key: 命令键解析
+id = "func.agent.skill_commands.resolve_skill_command_key"
+kind = "function"
+path = "agent/skill_commands.py:496"
+desc = "把消息里的命令键解析为技能标识"
+
+# --- agent/skill_bundles.py ---
+
+[[nodes]]  # 节点 func.agent.skill_bundles.scan_bundles: 扫描技能包
+id = "func.agent.skill_bundles.scan_bundles"
+kind = "function"
+path = "agent/skill_bundles.py:168"
+desc = "扫描全部技能包（bundle）"
+
+[[nodes]]  # 节点 func.agent.skill_bundles._load_bundle_file: 加载单个包文件
+id = "func.agent.skill_bundles._load_bundle_file"
+kind = "function"
+path = "agent/skill_bundles.py:116"
+desc = "解析加载单个 bundle 文件"
+
+# --- agent/skill_preprocessing.py ---
+
+[[nodes]]  # 节点 func.agent.skill_preprocessing.preprocess_skill_content: 预处理技能内容
+id = "func.agent.skill_preprocessing.preprocess_skill_content"
+kind = "function"
+path = "agent/skill_preprocessing.py:128"
+desc = "预处理：模板变量替换 + 内联 shell 展开"
+
+[[nodes]]  # 节点 func.agent.skill_preprocessing.load_skills_config: 加载技能配置
+id = "func.agent.skill_preprocessing.load_skills_config"
+kind = "function"
+path = "agent/skill_preprocessing.py:25"
+desc = "读取技能相关配置"
+
+# --- agent/skill_utils.py ---
+
+[[nodes]]  # 节点 func.agent.skill_utils.iter_skill_index_files: 技能发现统一入口（os.walk 穿透 symlink）
+id = "func.agent.skill_utils.iter_skill_index_files"
+kind = "function"
+path = "agent/skill_utils.py:797"
+desc = "技能发现统一入口：os.walk(followlinks=True) 枚举 SKILL.md；全库技能发现的窄腰（#75130 修复点）"
+
+# --- tools/skills_tool.py ---
+
+[[nodes]]  # 节点 func.tools.skills_tool._find_all_skills: 发现全部技能
+id = "func.tools.skills_tool._find_all_skills"
+kind = "function"
+path = "tools/skills_tool.py:669"
+desc = "发现全部技能（扫描目录+frontmatter 解析）"
+
+[[nodes]]  # 节点 func.tools.skills_tool._parse_frontmatter: 解析技能元数据
+id = "func.tools.skills_tool._parse_frontmatter"
+kind = "function"
+path = "tools/skills_tool.py:552"
+desc = "解析技能 frontmatter（名称/描述/平台/环境要求）"
+
+[[nodes]]  # 节点 func.tools.skills_tool.check_skills_requirements: 技能就绪检查
+id = "func.tools.skills_tool.check_skills_requirements"
+kind = "function"
+path = "tools/skills_tool.py:547"
+desc = "检查技能运行所需环境变量是否齐备"
+
+# --- tools/skills_hub.py ---
+
+[[nodes]]  # 节点 func.tools.skills_hub.SkillMeta: 技能元数据结构
+id = "func.tools.skills_hub.SkillMeta"
+kind = "function"
+path = "tools/skills_hub.py:131"
+desc = "技能元数据类（hub 侧）"
+
+[[nodes]]  # 节点 func.tools.skills_hub.SkillBundle: 技能包结构
+id = "func.tools.skills_hub.SkillBundle"
+kind = "function"
+path = "tools/skills_hub.py:145"
+desc = "技能包类（hub 侧）"
+
+# --- tools/skills_guard.py ---
+
+[[nodes]]  # 节点 func.tools.skills_guard.scan_skill: 技能安全扫描
+id = "func.tools.skills_guard.scan_skill"
+kind = "function"
+path = "tools/skills_guard.py:632"
+desc = "扫描单个技能的安全风险"
+
+[[nodes]]  # 节点 func.tools.skills_guard.should_allow_install: 是否允许安装
+id = "func.tools.skills_guard.should_allow_install"
+kind = "function"
+path = "tools/skills_guard.py:766"
+desc = "根据扫描结果决定是否允许安装"
+
+# ============================================================
+# 边：CONTAINS（文件归属模块）
+# ============================================================
+
+[[edges]]
+from = "mod.tools"
+to = "file.tools.skills_tool"
+rel = "CONTAINS"
+
+[[edges]]
+from = "mod.tools"
+to = "file.tools.skills_hub"
+rel = "CONTAINS"
+
+[[edges]]
+from = "mod.tools"
+to = "file.tools.skills_guard"
+rel = "CONTAINS"
+
+[[edges]]
+from = "mod.agent"
+to = "file.agent.skill_commands"
+rel = "CONTAINS"
+note = "平铺文件未归簇"
+
+[[edges]]
+from = "mod.agent"
+to = "file.agent.skill_bundles"
+rel = "CONTAINS"
+note = "平铺文件未归簇"
+
+[[edges]]
+from = "mod.agent"
+to = "file.agent.skill_preprocessing"
+rel = "CONTAINS"
+note = "平铺文件未归簇"
+
+# ============================================================
+# 边：CONTAINS（函数归属文件）
+# ============================================================
+
+[[edges]]
+from = "file.agent.skill_commands"
+to = "func.agent.skill_commands._load_skill_payload"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_commands"
+to = "func.agent.skill_commands.scan_skill_commands"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_commands"
+to = "func.agent.skill_commands.reload_skills"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_commands"
+to = "func.agent.skill_commands.resolve_skill_command_key"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_bundles"
+to = "func.agent.skill_bundles.scan_bundles"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_bundles"
+to = "func.agent.skill_bundles._load_bundle_file"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_preprocessing"
+to = "func.agent.skill_preprocessing.preprocess_skill_content"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_preprocessing"
+to = "func.agent.skill_preprocessing.load_skills_config"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_utils"
+to = "func.agent.skill_utils.iter_skill_index_files"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skills_tool"
+to = "func.tools.skills_tool._find_all_skills"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skills_tool"
+to = "func.tools.skills_tool._parse_frontmatter"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skills_tool"
+to = "func.tools.skills_tool.check_skills_requirements"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skills_hub"
+to = "func.tools.skills_hub.SkillMeta"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skills_hub"
+to = "func.tools.skills_hub.SkillBundle"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skills_guard"
+to = "func.tools.skills_guard.scan_skill"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skills_guard"
+to = "func.tools.skills_guard.should_allow_install"
+rel = "CONTAINS"
+
+# ============================================================
+# 边：REALIZED_BY（功能 → 实现函数）
+# ============================================================
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.agent.skill_commands._load_skill_payload"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.agent.skill_commands.scan_skill_commands"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.agent.skill_commands.reload_skills"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.agent.skill_commands.resolve_skill_command_key"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.agent.skill_bundles.scan_bundles"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.agent.skill_bundles._load_bundle_file"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.agent.skill_preprocessing.preprocess_skill_content"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.agent.skill_preprocessing.load_skills_config"
+rel = "REALIZED_BY"
+
+[[edges]]  # 发现环节核心：iter_skill_index_files 是技能发现的统一入口
+from = "feature.skill-load"
+to = "func.agent.skill_utils.iter_skill_index_files"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.tools.skills_tool._find_all_skills"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.tools.skills_tool._parse_frontmatter"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.tools.skills_tool.check_skills_requirements"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.tools.skills_hub.SkillMeta"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.tools.skills_hub.SkillBundle"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.tools.skills_guard.scan_skill"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-load"
+to = "func.tools.skills_guard.should_allow_install"
+rel = "REALIZED_BY"
