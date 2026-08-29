@@ -72,12 +72,20 @@ X-GRAPH/
 ## 查询工具
 
 ```bash
-python3 graph_query.py <节点id或关键词> [-l 过滤] [--explain]
+python3 graph_query.py <节点id或关键词> [选项]
 python3 graph_query.py                          # 缺参：列出可查节点
-python3 graph_query.py mod.agent                # 全层合并查询
-python3 graph_query.py mod.agent -l 1           # 文件层过滤（只看第一层）
-python3 graph_query.py mod.agent -l core        # 架构层过滤（只看 core 层）
-python3 graph_query.py _load_skill_payload --explain   # 关系翻译成人话
+
+# 查询姿势
+python3 graph_query.py mod.agent                # 精确 / 包含 / 近似(difflib) 自动降级
+python3 graph_query.py '%skill%'                # % LIKE 通配（id + path 双字段）
+
+# 选项
+-l 1 / -l core    按文件层(数字)或架构层(名)过滤
+-s                --list List 模式：只列出匹配节点，不展开详情
+-e                --explain 关系翻译成人话
+-c                --callchain 调用链展开（树形+调用点行号）
+-r                --callers 反向调用链（谁在调用我）
+-c -r             共存：正向+反向都输出
 ```
 
 特性：模糊匹配（精确→包含→近似）、缺参自动提示、跨文件引用自动合并。

@@ -314,6 +314,27 @@ path = 'agent/runtime_cwd.py'
 layer = 'core'
 desc = '运行时工作目录；被4个文件引用'
 
+[[nodes]]  # 节点 file.agent.system_prompt: 系统提示词组装（build_system_prompt/build_system_prompt_parts）
+id = 'file.agent.system_prompt'
+kind = 'file'
+path = 'agent/system_prompt.py'
+layer = 'core'
+desc = '系统提示词组装：stable/context/volatile 三层（build_system_prompt），会话级缓存'
+
+[[nodes]]  # 节点 file.agent.conversation_loop: 主循环实现（run_conversation 真身）
+id = 'file.agent.conversation_loop'
+kind = 'file'
+path = 'agent/conversation_loop.py'
+layer = 'core'
+desc = '主循环实现：run_conversation 真身（run_agent 是转发器）+ system prompt 恢复/首建'
+
+[[nodes]]  # 节点 file.agent.coding_context: 编码上下文；focus mode 技能分类压缩
+id = 'file.agent.coding_context'
+kind = 'file'
+path = 'agent/coding_context.py'
+layer = 'core'
+desc = '编码上下文：coding_compact_skill_categories（focus mode 压缩技能索引为名称行）'
+
 [[edges]]
 from = 'mod.agent'
 to = 'file.agent.transports'
@@ -347,6 +368,24 @@ note = '平铺文件未归簇'
 [[edges]]
 from = 'mod.agent'
 to = 'file.agent.runtime_cwd'
+rel = 'CONTAINS'
+note = '平铺文件未归簇'
+
+[[edges]]
+from = 'mod.agent'
+to = 'file.agent.system_prompt'
+rel = 'CONTAINS'
+note = '平铺文件未归簇'
+
+[[edges]]
+from = 'mod.agent'
+to = 'file.agent.conversation_loop'
+rel = 'CONTAINS'
+note = '平铺文件未归簇'
+
+[[edges]]
+from = 'mod.agent'
+to = 'file.agent.coding_context'
 rel = 'CONTAINS'
 note = '平铺文件未归簇'
 

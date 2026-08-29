@@ -389,3 +389,75 @@ rel = "REALIZED_BY"
 from = "feature.skill-load"
 to = "func.tools.skills_guard.should_allow_install"
 rel = "REALIZED_BY"
+
+# ------------------------------------------------------------
+# 补充：skill_view 节点（2026-08-28 AST 扫描发现漏建）
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 func.tools.skills_tool.skill_view: 技能视图（所有加载路径的汇聚点）
+id = "func.tools.skills_tool.skill_view"
+kind = "function"
+path = "tools/skills_tool.py:961"
+desc = "技能视图：查找+读取+预处理；CLI/cron 两路径汇聚点（#84667 现场），skill-load 链路心脏"
+
+# ============================================================
+# 边：CALLS（函数级调用，AST 提取 + 人工确认，2026-08-28）
+# ============================================================
+
+[[edges]]  # 命令扫描 → 技能发现
+at_line = 343  # 调用点行号
+from = "func.agent.skill_commands.scan_skill_commands"
+to = "func.agent.skill_utils.iter_skill_index_files"
+rel = "CALLS"
+
+[[edges]]  # 命令扫描 → 元数据解析
+at_line = 348  # 调用点行号
+from = "func.agent.skill_commands.scan_skill_commands"
+to = "func.tools.skills_tool._parse_frontmatter"
+rel = "CALLS"
+
+[[edges]]  # 技能发现 → 遍历入口
+at_line = 721  # 调用点行号
+from = "func.tools.skills_tool._find_all_skills"
+to = "func.agent.skill_utils.iter_skill_index_files"
+rel = "CALLS"
+
+[[edges]]  # 技能发现 → 元数据解析
+at_line = 729  # 调用点行号
+from = "func.tools.skills_tool._find_all_skills"
+to = "func.tools.skills_tool._parse_frontmatter"
+rel = "CALLS"
+
+[[edges]]  # 重载 → 重新扫描
+at_line = 474  # 调用点行号
+from = "func.agent.skill_commands.reload_skills"
+to = "func.agent.skill_commands.scan_skill_commands"
+rel = "CALLS"
+
+[[edges]]  # 包扫描 → 单包加载
+at_line = 179  # 调用点行号
+from = "func.agent.skill_bundles.scan_bundles"
+to = "func.agent.skill_bundles._load_bundle_file"
+rel = "CALLS"
+
+[[edges]]  # 预处理 → 配置读取
+at_line = 138  # 调用点行号
+from = "func.agent.skill_preprocessing.preprocess_skill_content"
+to = "func.agent.skill_preprocessing.load_skills_config"
+rel = "CALLS"
+
+[[edges]]  # 核心：载荷加载 → 技能视图（两路径汇聚）
+at_line = 151  # 调用点行号
+from = "func.agent.skill_commands._load_skill_payload"
+to = "func.tools.skills_tool.skill_view"
+rel = "CALLS"
+
+[[edges]]  # skill_view 归属文件
+from = "file.tools.skills_tool"
+to = "func.tools.skills_tool.skill_view"
+rel = "CONTAINS"
+
+[[edges]]  # skill_view 实现 skill-load（汇聚点）
+from = "feature.skill-load"
+to = "func.tools.skills_tool.skill_view"
+rel = "REALIZED_BY"

@@ -1,0 +1,554 @@
+# ============================================================
+# Layer 3 Graph — skill-startup 功能链（hermes 入口 → 技能索引注入 system prompt）
+# 格式：TOML（机器可解析）
+# 粒度：功能级（feature + function）
+# 说明：skill-load 图覆盖"运行时命令/载荷加载"侧（/skills 命令、_load_skill_payload），
+#       本图覆盖"启动注入"侧：hermes 命令 → cmd_chat → cli.main → agent 初始化 →
+#       system prompt 构建 → build_skills_system_prompt（技能索引三层缓存）→ 注入 stable 层。
+#       启动侧的"加载"= 索引注入（技能名+描述+分类），SKILL.md 全文是运行时 skill_view 才读。
+# 更新：2026-08-29
+# 约定：file.* 节点跨文件引用 Layer-1/Layer-2（不重复定义）；
+#       iter_skill_index_files 等节点跨文件引用 Layer-3-Graph-skill_load.toml
+# ============================================================
+
+[graph]
+name = "Layer 3 Graph - skill-startup 功能链（入口→技能索引注入）"
+layer = 3
+granularity = "功能级（feature + function）"
+created = "2026-08-29"
+note = "REALIZED_BY/CALLS 边均为当次 grep/AST 实测；行号快照 2026-08-29，漂移后须复核"
+
+# ------------------------------------------------------------
+# 功能节点
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 feature.skill-startup: 技能启动注入功能链
+id = "feature.skill-startup"
+kind = "feature"
+desc = "技能启动注入：hermes 入口 → CLI 会话 → agent 初始化 → system prompt 构建 → 技能索引三层缓存（LRU→快照→冷扫描）→ 注入 stable 层；横切 hermes_cli/ + cli.py + run_agent.py + agent/"
+note = "与 feature.skill-load（运行时命令/载荷侧）互补：本图是启动时让 agent 感知技能清单"
+known_issues = "索引只带名+描述不带全文（全文靠运行时 skill_view）；快照 manifest 失配自动落冷扫描；resume 会话走 DB 恢复不走重建"
+
+# ------------------------------------------------------------
+# 函数节点（入口层，layer=entry）
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 func.hermes_cli.main.main: hermes 命令入口
+id = "func.hermes_cli.main.main"
+kind = "function"
+path = "hermes_cli/main.py:13206"
+layer = "entry"
+desc = "hermes 命令入口：进程名/UTF-8/自愈 → 建全量 parser → args.func 分发（15181）"
+
+[[nodes]]  # 节点 func.hermes_cli.main.cmd_chat: 聊天会话总调度
+id = "func.hermes_cli.main.cmd_chat"
+kind = "function"
+path = "hermes_cli/main.py:2295"
+layer = "entry"
+desc = "聊天命令：resume/continue 解析、cwd 恢复、首启检查、bundled 技能同步 → cli.main 或 TUI"
+
+[[nodes]]  # 节点 func.hermes_cli.main._sync_bundled_skills_for_startup: 启动同步内置技能
+id = "func.hermes_cli.main._sync_bundled_skills_for_startup"
+kind = "function"
+path = "hermes_cli/main.py:759"
+layer = "entry"
+desc = "启动时同步 bundled 技能到 skills 目录（跳过未变项；cmd_chat 2424 调用）"
+
+[[nodes]]  # 节点 func.cli.main: CLI 会话入口
+id = "func.cli.main"
+kind = "function"
+path = "cli.py:15384"
+layer = "entry"
+desc = "CLI 会话入口：interactive 标记、worktree 隔离、--skills 预载参数、会话循环"
+
+[[nodes]]  # 节点 func.hermes_cli.cli_agent_setup_mixin._init_agent: 首轮懒初始化 agent
+id = "func.hermes_cli.cli_agent_setup_mixin._init_agent"
+kind = "function"
+path = "hermes_cli/cli_agent_setup_mixin.py:226"
+layer = "entry"
+desc = "首轮懒初始化 agent（cli.py:11630 调用）：turn route 解析 + AIAgent 实例化（353）"
+
+# ------------------------------------------------------------
+# 函数节点（agent 核心层，layer=core）
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 func.run_agent.AIAgent: AIAgent 类（类节点）
+id = "func.run_agent.AIAgent"
+kind = "function"
+path = "run_agent.py:399"
+layer = "core"
+desc = "AIAgent 类：会话/工具/系统提示词缓存（_cached_system_prompt）的宿主"
+
+[[nodes]]  # 节点 func.run_agent.AIAgent.run_conversation: 主循环转发器
+id = "func.run_agent.AIAgent.run_conversation"
+kind = "function"
+path = "run_agent.py:6329"
+layer = "core"
+desc = "转发器：记账/portal 上下文后转发 conversation_loop.run_conversation（6371）"
+
+[[nodes]]  # 节点 func.run_agent.AIAgent._build_system_prompt: system prompt 转发器
+id = "func.run_agent.AIAgent._build_system_prompt"
+kind = "function"
+path = "run_agent.py:3815"
+layer = "core"
+desc = "转发器：→ agent.system_prompt.build_system_prompt（3818）"
+
+[[nodes]]  # 节点 func.agent.conversation_loop.run_conversation: 主循环真身
+id = "func.agent.conversation_loop.run_conversation"
+kind = "function"
+path = "agent/conversation_loop.py:588"
+layer = "core"
+desc = "主循环真身（run_agent 是转发器）；首 turn 构建回合上下文（641）"
+
+[[nodes]]  # 节点 func.agent.conversation_loop._restore_or_build_system_prompt: 恢复/首建 system prompt
+id = "func.agent.conversation_loop._restore_or_build_system_prompt"
+kind = "function"
+path = "agent/conversation_loop.py:304"
+layer = "core"
+desc = "从 session DB 恢复缓存的 system prompt 或首次构建（383 转发 _build_system_prompt）"
+
+[[nodes]]  # 节点 func.agent.turn_context.build_turn_context: 回合上下文构建
+id = "func.agent.turn_context.build_turn_context"
+kind = "function"
+path = "agent/turn_context.py:268"
+layer = "core"
+desc = "回合上下文；524 判定 _cached_system_prompt is None → 恢复/首建"
+
+[[nodes]]  # 节点 func.agent.system_prompt.build_system_prompt: 全量 system prompt 组装
+id = "func.agent.system_prompt.build_system_prompt"
+kind = "function"
+path = "agent/system_prompt.py:527"
+layer = "core"
+desc = "组装 stable/context/volatile 三层并缓存到 _cached_system_prompt（会话级冻结，保 prompt cache）"
+
+[[nodes]]  # 节点 func.agent.system_prompt.build_system_prompt_parts: 三层部件
+id = "func.agent.system_prompt.build_system_prompt_parts"
+kind = "function"
+path = "agent/system_prompt.py:147"
+layer = "core"
+desc = "stable/context/volatile 三层；294 判定 has_skills_tools → 316 调 build_skills_system_prompt"
+
+# ------------------------------------------------------------
+# 函数节点（技能索引构建层，layer=core）★本链核心
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 func.agent.prompt_builder.build_skills_system_prompt: 技能索引构建 ★核心
+id = "func.agent.prompt_builder.build_skills_system_prompt"
+kind = "function"
+path = "agent/prompt_builder.py:1490"
+layer = "core"
+desc = "★技能索引构建：L1 进程内 LRU → L2 磁盘快照(.skills_prompt_snapshot.json) → L3 冷扫描；过滤平台/禁用/工具条件；产出技能索引文本"
+
+[[nodes]]  # 节点 func.agent.prompt_builder._load_skills_snapshot: 读磁盘快照
+id = "func.agent.prompt_builder._load_skills_snapshot"
+kind = "function"
+path = "agent/prompt_builder.py:1346"
+layer = "core"
+desc = "读磁盘快照（mtime/size manifest 校验，失配返回 None 落冷扫描）"
+
+[[nodes]]  # 节点 func.agent.prompt_builder._write_skills_snapshot: 写磁盘快照
+id = "func.agent.prompt_builder._write_skills_snapshot"
+kind = "function"
+path = "agent/prompt_builder.py:1364"
+layer = "core"
+desc = "冷扫描后写快照（manifest + skill entries），跨进程复用"
+
+[[nodes]]  # 节点 func.agent.prompt_builder._build_snapshot_entry: 快照条目构建
+id = "func.agent.prompt_builder._build_snapshot_entry"
+kind = "function"
+path = "agent/prompt_builder.py:1383"
+layer = "core"
+desc = "从 SKILL.md 路径 + frontmatter 构建快照条目（skill_name/category/描述/平台）"
+
+[[nodes]]  # 节点 func.agent.prompt_builder._parse_skill_file: 解析 SKILL.md
+id = "func.agent.prompt_builder._parse_skill_file"
+kind = "function"
+path = "agent/prompt_builder.py:1417"
+layer = "core"
+desc = "读 SKILL.md 一次：返回（平台兼容, frontmatter, description）"
+
+[[nodes]]  # 节点 func.agent.prompt_builder._skill_should_show: 工具条件过滤
+id = "func.agent.prompt_builder._skill_should_show"
+kind = "function"
+path = "agent/prompt_builder.py:1443"
+layer = "core"
+desc = "按 frontmatter conditions 与 available_tools/toolsets 判定技能是否进索引"
+
+[[nodes]]  # 节点 func.agent.coding_context.coding_compact_skill_categories: focus mode 压缩
+id = "func.agent.coding_context.coding_compact_skill_categories"
+kind = "function"
+path = "agent/coding_context.py:648"
+layer = "core"
+desc = "focus mode（编码姿势）下把整类技能压成名称行（不隐藏，仅丢描述）"
+
+# ------------------------------------------------------------
+# 函数节点（技能发现/过滤，跨文件引用 skill_load 图已有节点）
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 func.agent.skill_utils.skill_matches_platform_list: 平台兼容过滤
+id = "func.agent.skill_utils.skill_matches_platform_list"
+kind = "function"
+path = "agent/skill_utils.py:175"
+layer = "core"
+desc = "平台兼容判定（macOS-only 技能不在 Linux 显示）"
+
+[[nodes]]  # 节点 func.agent.skill_utils.get_disabled_skill_names: 禁用名单
+id = "func.agent.skill_utils.get_disabled_skill_names"
+kind = "function"
+path = "agent/skill_utils.py:369"
+layer = "core"
+desc = "从 config.yaml 读禁用技能名单（per-platform）"
+
+[[nodes]]  # 节点 func.agent.skill_utils.get_all_skills_dirs: 全部技能目录
+id = "func.agent.skill_utils.get_all_skills_dirs"
+kind = "function"
+path = "agent/skill_utils.py:515"
+layer = "core"
+desc = "本地 ~/.hermes/skills/ + external_dirs（只读，重名本地优先）"
+
+[[nodes]]  # 节点 func.hermes_constants.get_skills_dir: 技能目录解析
+id = "func.hermes_constants.get_skills_dir"
+kind = "function"
+path = "hermes_constants.py:1195"
+layer = "infra"
+desc = "解析 ~/.hermes/skills/（build_skills_system_prompt:1515 调用；定义在 infra 层！）"
+
+# ============================================================
+# 边：CONTAINS（函数归属文件；file 节点跨文件引用 L1/L2）
+# ============================================================
+
+[[edges]]
+from = "file.hermes_cli.main"
+to = "func.hermes_cli.main.main"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.main"
+to = "func.hermes_cli.main.cmd_chat"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.main"
+to = "func.hermes_cli.main._sync_bundled_skills_for_startup"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.cli"
+to = "func.cli.main"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.cli_agent_setup_mixin"
+to = "func.hermes_cli.cli_agent_setup_mixin._init_agent"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.run_agent"
+to = "func.run_agent.AIAgent"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.run_agent"
+to = "func.run_agent.AIAgent.run_conversation"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.run_agent"
+to = "func.run_agent.AIAgent._build_system_prompt"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.conversation_loop"
+to = "func.agent.conversation_loop.run_conversation"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.conversation_loop"
+to = "func.agent.conversation_loop._restore_or_build_system_prompt"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.turn_context"
+to = "func.agent.turn_context.build_turn_context"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.system_prompt"
+to = "func.agent.system_prompt.build_system_prompt"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.system_prompt"
+to = "func.agent.system_prompt.build_system_prompt_parts"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.prompt_builder"
+to = "func.agent.prompt_builder.build_skills_system_prompt"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.prompt_builder"
+to = "func.agent.prompt_builder._load_skills_snapshot"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.prompt_builder"
+to = "func.agent.prompt_builder._write_skills_snapshot"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.prompt_builder"
+to = "func.agent.prompt_builder._build_snapshot_entry"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.prompt_builder"
+to = "func.agent.prompt_builder._parse_skill_file"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.prompt_builder"
+to = "func.agent.prompt_builder._skill_should_show"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.coding_context"
+to = "func.agent.coding_context.coding_compact_skill_categories"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_utils"
+to = "func.agent.skill_utils.skill_matches_platform_list"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_utils"
+to = "func.agent.skill_utils.get_disabled_skill_names"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_utils"
+to = "func.agent.skill_utils.get_all_skills_dirs"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_constants"
+to = "func.hermes_constants.get_skills_dir"
+rel = "CONTAINS"
+
+# ============================================================
+# 边：REALIZED_BY（功能 → 实现函数）
+# ============================================================
+
+[[edges]]  # 核心：索引构建
+from = "feature.skill-startup"
+to = "func.agent.prompt_builder.build_skills_system_prompt"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-startup"
+to = "func.agent.prompt_builder._load_skills_snapshot"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-startup"
+to = "func.agent.prompt_builder._write_skills_snapshot"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-startup"
+to = "func.agent.prompt_builder._build_snapshot_entry"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-startup"
+to = "func.agent.prompt_builder._parse_skill_file"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-startup"
+to = "func.agent.prompt_builder._skill_should_show"
+rel = "REALIZED_BY"
+
+[[edges]]  # 发现/过滤（iter_skill_index_files 跨文件引用 skill_load 图）
+from = "feature.skill-startup"
+to = "func.agent.skill_utils.iter_skill_index_files"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-startup"
+to = "func.agent.skill_utils.skill_matches_platform_list"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-startup"
+to = "func.agent.skill_utils.get_disabled_skill_names"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-startup"
+to = "func.agent.skill_utils.get_all_skills_dirs"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-startup"
+to = "func.hermes_constants.get_skills_dir"
+rel = "REALIZED_BY"
+
+[[edges]]  # focus mode 压缩
+from = "feature.skill-startup"
+to = "func.agent.coding_context.coding_compact_skill_categories"
+rel = "REALIZED_BY"
+
+[[edges]]  # 注入点
+from = "feature.skill-startup"
+to = "func.agent.system_prompt.build_system_prompt"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.skill-startup"
+to = "func.agent.system_prompt.build_system_prompt_parts"
+rel = "REALIZED_BY"
+
+# ============================================================
+# 边：CALLS（函数级调用，当次 grep 实测，at_line=调用点行号）
+# ============================================================
+
+[[edges]]  # 入口分发：main → cmd_chat（args.func 分发点）
+at_line = 15181
+from = "func.hermes_cli.main.main"
+to = "func.hermes_cli.main.cmd_chat"
+rel = "CALLS"
+
+[[edges]]  # cmd_chat → bundled 技能同步
+at_line = 2424
+from = "func.hermes_cli.main.cmd_chat"
+to = "func.hermes_cli.main._sync_bundled_skills_for_startup"
+rel = "CALLS"
+
+[[edges]]  # cmd_chat → CLI 会话入口
+at_line = 2501
+from = "func.hermes_cli.main.cmd_chat"
+to = "func.cli.main"
+rel = "CALLS"
+
+[[edges]]  # 会话循环 → 懒初始化 agent
+at_line = 11630
+from = "func.cli.main"
+to = "func.hermes_cli.cli_agent_setup_mixin._init_agent"
+rel = "CALLS"
+
+[[edges]]  # 实例化 AIAgent
+at_line = 353
+from = "func.hermes_cli.cli_agent_setup_mixin._init_agent"
+to = "func.run_agent.AIAgent"
+rel = "CALLS"
+
+[[edges]]  # 转发器 → 主循环真身
+at_line = 6371
+from = "func.run_agent.AIAgent.run_conversation"
+to = "func.agent.conversation_loop.run_conversation"
+rel = "CALLS"
+
+[[edges]]  # 主循环 → 回合上下文
+at_line = 641
+from = "func.agent.conversation_loop.run_conversation"
+to = "func.agent.turn_context.build_turn_context"
+rel = "CALLS"
+
+[[edges]]  # 首 turn system prompt 判定 → 恢复/首建
+at_line = 526
+from = "func.agent.turn_context.build_turn_context"
+to = "func.agent.conversation_loop._restore_or_build_system_prompt"
+rel = "CALLS"
+
+[[edges]]  # 首建 → 转发 _build_system_prompt
+at_line = 383
+from = "func.agent.conversation_loop._restore_or_build_system_prompt"
+to = "func.run_agent.AIAgent._build_system_prompt"
+rel = "CALLS"
+
+[[edges]]  # 转发 → 组装
+at_line = 3818
+from = "func.run_agent.AIAgent._build_system_prompt"
+to = "func.agent.system_prompt.build_system_prompt"
+rel = "CALLS"
+
+[[edges]]  # 组装 → 三层部件
+at_line = 542
+from = "func.agent.system_prompt.build_system_prompt"
+to = "func.agent.system_prompt.build_system_prompt_parts"
+rel = "CALLS"
+
+[[edges]]  # ★关键调用：stable 层 → 技能索引构建（has_skills_tools 判定后）
+at_line = 316
+from = "func.agent.system_prompt.build_system_prompt_parts"
+to = "func.agent.prompt_builder.build_skills_system_prompt"
+rel = "CALLS"
+
+[[edges]]  # focus mode 压缩（311）
+at_line = 311
+from = "func.agent.system_prompt.build_system_prompt_parts"
+to = "func.agent.coding_context.coding_compact_skill_categories"
+rel = "CALLS"
+
+[[edges]]  # 技能目录解析（定义在 infra 层）
+at_line = 1515
+from = "func.agent.prompt_builder.build_skills_system_prompt"
+to = "func.hermes_constants.get_skills_dir"
+rel = "CALLS"
+
+[[edges]]  # 全部技能目录（含 external）
+at_line = 1516
+from = "func.agent.prompt_builder.build_skills_system_prompt"
+to = "func.agent.skill_utils.get_all_skills_dirs"
+rel = "CALLS"
+
+[[edges]]  # 禁用名单
+at_line = 1525
+from = "func.agent.prompt_builder.build_skills_system_prompt"
+to = "func.agent.skill_utils.get_disabled_skill_names"
+rel = "CALLS"
+
+[[edges]]  # L2 快照命中路径
+at_line = 1542
+from = "func.agent.prompt_builder.build_skills_system_prompt"
+to = "func.agent.prompt_builder._load_skills_snapshot"
+rel = "CALLS"
+
+[[edges]]  # 平台过滤（快照路径）
+at_line = 1556
+from = "func.agent.prompt_builder.build_skills_system_prompt"
+to = "func.agent.skill_utils.skill_matches_platform_list"
+rel = "CALLS"
+
+[[edges]]  # 工具条件过滤（快照路径）
+at_line = 1560
+from = "func.agent.prompt_builder.build_skills_system_prompt"
+to = "func.agent.prompt_builder._skill_should_show"
+rel = "CALLS"
+
+[[edges]]  # L3 冷扫描：技能发现统一入口（窄腰）
+at_line = 1576
+from = "func.agent.prompt_builder.build_skills_system_prompt"
+to = "func.agent.skill_utils.iter_skill_index_files"
+rel = "CALLS"
+
+[[edges]]  # 冷扫描：SKILL.md 解析
+at_line = 1577
+from = "func.agent.prompt_builder.build_skills_system_prompt"
+to = "func.agent.prompt_builder._parse_skill_file"
+rel = "CALLS"
+
+[[edges]]  # 冷扫描：快照条目
+at_line = 1578
+from = "func.agent.prompt_builder.build_skills_system_prompt"
+to = "func.agent.prompt_builder._build_snapshot_entry"
+rel = "CALLS"
+
+[[edges]]  # 冷扫描收尾：写盘快照
+at_line = 1609
+from = "func.agent.prompt_builder.build_skills_system_prompt"
+to = "func.agent.prompt_builder._write_skills_snapshot"
+rel = "CALLS"

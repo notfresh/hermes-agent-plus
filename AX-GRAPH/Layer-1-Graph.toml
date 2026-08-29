@@ -255,6 +255,22 @@ path = 'setup.py'
 layer = 'infra'
 desc = '构建脚本'
 
+# --- hermes_cli 模块内部文件（第一批展开：hermes 入口链路）---
+
+[[nodes]]  # 节点 file.hermes_cli.main: hermes CLI 命令入口（console_scripts 指向 hermes_cli.main:main）
+id = 'file.hermes_cli.main'
+kind = 'file'
+path = 'hermes_cli/main.py'
+layer = 'entry'
+desc = 'hermes 命令入口：建全量 parser + args.func 分发；cmd_chat 是聊天会话总调度'
+
+[[nodes]]  # 节点 file.hermes_cli.cli_agent_setup_mixin: CLI 会话 agent 初始化 mixin
+id = 'file.hermes_cli.cli_agent_setup_mixin'
+kind = 'file'
+path = 'hermes_cli/cli_agent_setup_mixin.py'
+layer = 'entry'
+desc = 'CLI 会话 agent 初始化 mixin：_init_agent 定义处（cli.py 会话类混入）'
+
 [[nodes]]  # 节点 file.cron.__init__: 包出口：暴露 jobs + scheduler
 id = 'file.cron.__init__'
 kind = 'file'
@@ -383,6 +399,20 @@ rel = 'CONTAINS'
 from = 'mod.cron'
 to = 'file.cron.scripts.__init__'
 rel = 'CONTAINS'
+
+# --- hermes_cli 展开第一批：入口链路文件归属 ---
+
+[[edges]]
+from = 'mod.hermes_cli'
+to = 'file.hermes_cli.main'
+rel = 'CONTAINS'
+note = '模块内部文件（第一批展开：hermes 入口链路）'
+
+[[edges]]
+from = 'mod.hermes_cli'
+to = 'file.hermes_cli.cli_agent_setup_mixin'
+rel = 'CONTAINS'
+note = '模块内部文件（第一批展开：hermes 入口链路）'
 
 [[edges]]
 from = 'mod.hermes_cli'
