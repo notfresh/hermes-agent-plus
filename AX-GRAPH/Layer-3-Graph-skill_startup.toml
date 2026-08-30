@@ -25,6 +25,7 @@ note = "REALIZED_BY/CALLS 边均为当次 grep/AST 实测；行号快照 2026-08
 [[nodes]]  # 节点 feature.skill-startup: 技能启动注入功能链
 id = "feature.skill-startup"
 kind = "feature"
+layer = "core"
 desc = "技能启动注入：hermes 入口 → CLI 会话 → agent 初始化 → system prompt 构建 → 技能索引三层缓存（LRU→快照→冷扫描）→ 注入 stable 层；横切 hermes_cli/ + cli.py + run_agent.py + agent/"
 note = "与 feature.skill-load（运行时命令/载荷侧）互补：本图是启动时让 agent 感知技能清单"
 known_issues = "索引只带名+描述不带全文（全文靠运行时 skill_view）；快照 manifest 失配自动落冷扫描；resume 会话走 DB 恢复不走重建"

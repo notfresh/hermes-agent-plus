@@ -1,0 +1,18 @@
+# 节点详细介绍（KV：节点id → 多行 markdown 读码笔记）
+# 由 graph_query.py -b 维护（vim 编辑），勿手改格式
+
+[details]
+"func.agent.prompt_builder.build_skills_system_prompt" = """
+★技能索引构建（启动链核心）：L1 进程内 LRU → L2 磁盘快照(.skills_prompt_snapshot.json) → L3 冷扫描。
+
+上游：build_system_prompt_parts 仅在 has_skills_tools=True 时调用（system_prompt.py:316）
+过滤链：平台兼容 → 禁用名单 → 工具条件(_skill_should_show)
+坑：快照 manifest 失配自动落冷扫描；缓存 key 含 tools/toolsets 集合
+
+
+
+"""
+
+"func.agent.system_prompt.build_system_prompt" = """
+abcdefg
+"""

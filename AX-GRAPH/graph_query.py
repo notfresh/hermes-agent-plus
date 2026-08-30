@@ -22,7 +22,10 @@ import argparse
 from pathlib import Path
 
 BASE = Path(__file__).parent
+REPO = BASE.parent  # 图目录 AX-GRAPH 的上级 = 仓库根（节点 path 是相对仓库根的！）
 ARCH_LAYERS = {"core", "interface", "capability", "application", "entry", "infra"}
+VALID_KINDS = {"module", "file", "cluster", "subpackage", "feature", "function"}
+VALID_RELS = {"CONTAINS", "DEPENDS_ON", "REALIZED_BY", "CALLS"}
 def ppath(node):
     """path 输出统一 ./ 前缀（VSCode Ctrl+点击跳转友好）"""
     p = node.get("path") if node else None
@@ -116,7 +119,7 @@ def show(nid, data, arch=None, explain=False):
     for e in sorted(out, key=lambda e: (e["rel"], e["to"])):
         w = f"  weight={e['weight']}" if e.get("weight") else ""
         note = f"  [{e['note']}]" if e.get("note") else ""
-        d = nodes.get(e["to"], {}).get("desc", "")[:36]
+        d = nodes.get(e["to"], {}).get("desc", "")
         print(f"  [{e['rel']}] → {e['to']}{w}  {d}{note}")
 
     if arch:
@@ -126,7 +129,7 @@ def show(nid, data, arch=None, explain=False):
     for e in sorted(inn, key=lambda e: (e["rel"], e["from"])):
         w = f"  weight={e['weight']}" if e.get("weight") else ""
         note = f"  [{e['note']}]" if e.get("note") else ""
-        d = nodes.get(e["from"], {}).get("desc", "")[:36]
+        d = nodes.get(e["from"], {}).get("desc", "")
         print(f"  [{e['rel']}] {e['from']} →{w}  {d}{note}")
 
     if explain:
@@ -237,6 +240,105 @@ def show_callers(nid, data):
 from collections import Counter
 
 
+DETAILS_FILE = BASE / "NodeDetails.toml"
+
+
+def load_details():
+    """加载 NodeDetails.toml（KV：节点id → 详细介绍文本）。不存在返回 {}。"""
+    if not DETAILS_FILE.exists():
+        return {}
+    try:
+        with open(DETAILS_FILE, "rb") as f:
+            return tomllib.load(f).get("details", {})
+    except Exception:
+        return {}
+
+
+def save_details(details):
+    """写 NodeDetails.toml（多行字符串字面量，KV 形式）。"""
+    lines = [
+        "# 节点详细介绍（KV：节点id → 多行 markdown 读码笔记）",
+        "# 由 graph_query.py -b 维护（vim 编辑），勿手改格式",
+        "",
+        "[details]",
+    ]
+    for k in sorted(details):
+        v = details[k].replace('"""', '\\"""')
+        lines.append(f'"{k}" = """')
+        lines.append(v)
+        lines.append('"""')
+        lines.append("")
+    DETAILS_FILE.write_text("\n".join(lines), encoding="utf-8")
+
+
+def build_detail(nid, text=None):
+    """-b 构建节点详细介绍：--text 直写；缺省打开 $EDITOR（缺省 vim）编辑临时文件。
+    预填旧内容；清空保存=删除该详情。返回退出码。"""
+    nodes = load()["nodes"]
+    matches = fuzzy_find(nodes, nid)
+    if not matches:
+        print(f"未找到匹配: {nid}")
+        return 1
+    target = matches[0]
+    if len(matches) > 1:
+        print(f"匹配 {len(matches)} 个，编辑第一个: {target}（其余: {', '.join(matches[1:5])}）")
+    details = load_details()
+    old = details.get(target, "")
+
+    if text is not None:
+        if text.strip():
+            details[target] = text.strip()
+            print(f"✓ 已写入 {target} 的详细介绍（{len(text.strip())} 字符）")
+        else:
+            details.pop(target, None)
+            print(f"已删除 {target} 的详细介绍")
+        save_details(details)
+        return 0
+
+    import os
+    import subprocess
+    import tempfile
+
+    fd, tmp = tempfile.mkstemp(suffix=".md", prefix="xgraph-detail-", text=True)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(old)
+    editor = os.environ.get("EDITOR", "vim")
+    print(f"打开 {editor} 编辑 [{target}] 的详细介绍（保存退出后自动写入；清空保存=删除）")
+    try:
+        rc = subprocess.call([editor, tmp])
+    except FileNotFoundError:
+        os.unlink(tmp)
+        print(f"找不到编辑器 {editor}（设置 EDITOR 环境变量，或改用 --text 直写）")
+        return 1
+    if rc != 0:
+        os.unlink(tmp)
+        print(f"编辑器异常退出（rc={rc}），未保存")
+        return 1
+    with open(tmp, encoding="utf-8") as f:
+        new = f.read().strip()
+    os.unlink(tmp)
+    if not new:
+        details.pop(target, None)
+        print(f"已删除 {target} 的详细介绍")
+    else:
+        details[target] = new
+        print(f"✓ 已写入 {target} 的详细介绍（{len(new)} 字符）")
+    save_details(details)
+    return 0
+
+
+def show_detail(nid, data):
+    """-d 显示节点详细介绍（show 模式末尾调用）。"""
+    details = load_details()
+    det = details.get(nid)
+    print()
+    if det:
+        print(f"-- 📖 详细介绍（NodeDetails.toml）--")
+        print(det)
+    else:
+        print(f"（{nid} 暂无详细介绍，可执行 -b {nid} 添加）")
+
+
 def show_feature_callgraph(nid, data):
     """feature 节点的内部调用图：实现函数之间的 CALLS 关系 + 入口/中间/叶子角色"""
     nodes = {n["id"]: n for n in data["nodes"]}
@@ -283,6 +385,95 @@ def show_feature_callgraph(nid, data):
         print(f"    {e['from'].rsplit('.', 1)[-1]} → {e['to'].rsplit('.', 1)[-1]}  @ {loc}")
 
 
+def validate(data, scope=None, layer_num=None):
+    """图完整性校验。范围控制：全量 / -l 层文件 / 关键词节点集。
+    分级：Error（阻塞：悬空/path错/行号错/function缺path）vs Warning（提示：缺layer/weight/desc等历史欠账）。
+    悬空边始终用全量节点集解析（跨文件引用合法，避免误报）。
+    返回 Error 数（0=通过）。"""
+    nodes_all = {n["id"]: n for n in data["nodes"]}
+    edges_all = data["edges"]
+    errors, warnings = [], []
+
+    # 详情悬空检查（NodeDetails.toml 的 key 必须是合法节点 id；全局检查）
+    for k in load_details():
+        if k not in nodes_all:
+            errors.append(f"[详情] NodeDetails.toml 的 key 悬空（非合法节点）: {k}")
+
+    if layer_num is not None:
+        layer_names = {p.name for p in BASE.glob("Layer-*.toml") if p.name.startswith(f"Layer-{layer_num}-Graph")}
+        scope_nodes = {nid: n for nid, n in nodes_all.items() if n.get("source") in layer_names}
+        scope_edges = [e for e in edges_all if e.get("source") in layer_names]
+        scope_desc = f"第 {layer_num} 层文件"
+    elif scope:
+        ids = fuzzy_find(data["nodes"], scope)
+        if not ids:
+            print(f"未找到匹配: {scope}")
+            return 1
+        scope_ids = set(ids)
+        scope_nodes = {i: nodes_all[i] for i in ids if i in nodes_all}
+        scope_edges = [e for e in edges_all if e["from"] in scope_ids or e["to"] in scope_ids]
+        scope_desc = f"关键词 {scope!r}（{len(scope_nodes)} 节点及其关联边）"
+    else:
+        scope_nodes = nodes_all
+        scope_edges = edges_all
+        scope_desc = "全量"
+
+    for nid, n in scope_nodes.items():
+        for fld in ("id", "kind"):
+            if fld not in n:
+                errors.append(f"[节点] {nid} 缺必填字段 {fld}")
+        kind = n.get("kind")
+        if kind not in VALID_KINDS:
+            errors.append(f"[节点] {nid} kind 非法: {kind!r}（合法: {'/'.join(sorted(VALID_KINDS))}）")
+        if "path" not in n or not n.get("path"):
+            if kind == "function":
+                errors.append(f"[节点] {nid} function 缺 path（必须带 :行号）")
+            else:
+                warnings.append(f"[节点] {nid} 缺 path（feature 可省，file/module 建议填）")
+        if "layer" not in n:
+            warnings.append(f"[节点] {nid} 缺 layer（历史欠账，建议补）")
+        elif n.get("layer") not in ARCH_LAYERS:
+            warnings.append(f"[节点] {nid} layer 非法: {n.get('layer')!r}（合法: {'/'.join(sorted(ARCH_LAYERS))}）")
+        if not n.get("desc"):
+            warnings.append(f"[节点] {nid} 缺 desc（查询工具展示空白）")
+        p = n.get("path")
+        if p:
+            filepart = re.sub(r":\d+$", "", p)
+            full = REPO / filepart
+            if not full.exists():
+                errors.append(f"[节点] {nid} path 不存在: {p}")
+            else:
+                m = re.search(r":(\d+)$", p)
+                if m:
+                    ln = int(m.group(1))
+                    lines = full.read_text(encoding="utf-8").splitlines()
+                    target = lines[ln - 1] if ln <= len(lines) else ""
+                    if not re.search(r"def |class |async def ", target):
+                        errors.append(f"[节点] {nid} 行号 {ln} 不是 def/class: {target.strip()[:50]}")
+
+    for e in scope_edges:
+        if e["from"] not in nodes_all:
+            errors.append(f"[边] {e['from']} → {e['to']} ({e['rel']}) 起点悬空")
+        if e["to"] not in nodes_all:
+            errors.append(f"[边] {e['from']} → {e['to']} ({e['rel']}) 终点悬空")
+        if e.get("rel") not in VALID_RELS:
+            errors.append(f"[边] {e['from']} → {e['to']} rel 非法: {e.get('rel')!r}")
+        if e.get("rel") == "CALLS" and "at_line" not in e:
+            warnings.append(f"[边] {e['from']} → {e['to']} CALLS 缺 at_line（无法跳转调用现场）")
+        if e.get("rel") == "DEPENDS_ON" and "weight" not in e:
+            warnings.append(f"[边] {e['from']} → {e['to']} DEPENDS_ON 缺 weight（历史欠账）")
+
+    if errors or warnings:
+        print(f"⚠ 校验：{len(errors)} 错误 / {len(warnings)} 警告（范围: {scope_desc}，{len(scope_nodes)} 节点 / {len(scope_edges)} 边，全量节点 {len(nodes_all)}）")
+        for pr in errors:
+            print(f"  ✗ {pr}")
+        for pr in warnings:
+            print(f"  ⚠ {pr}")
+        return len(errors)
+    print(f"✓ 校验通过（范围: {scope_desc}，{len(scope_nodes)} 节点 / {len(scope_edges)} 边，全量节点 {len(nodes_all)}）")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="X-GRAPH 查询：查看节点第一层外围")
     parser.add_argument("query", nargs="?", help="节点 id 或关键词")
@@ -291,7 +482,27 @@ def main():
     parser.add_argument("-e", "--explain", action="store_true", help="把关系翻译成中文解读（人话版）")
     parser.add_argument("-c", "--callchain", action="store_true", help="从入口展开调用链（树形+调用点行号）")
     parser.add_argument("-r", "--callers", action="store_true", help="反向调用链：谁在调用我")
+    parser.add_argument("-b", "--build", action="store_true", help="构建/编辑节点详细介绍：--text 直写，缺省打开 $EDITOR(vim) 编辑临时文件")
+    parser.add_argument("-d", "--detail", action="store_true", help="查询时在末尾显示该节点的详细介绍（NodeDetails.toml）")
+    parser.add_argument("--text", help="配合 -b：直接写入的详细介绍文本（多行用 \\n）")
+    parser.add_argument("--validate", action="store_true", help="图完整性校验：悬空边/path/行号/字段/详情key。范围=全部；配 -l 数字=某层文件；带关键词=匹配节点及其边")
     args = parser.parse_args()
+
+    if args.validate:
+        # 校验始终基于全量图（跨文件引用合法），范围控制：-l 层文件 / 关键词节点集
+        full = load()
+        if args.layer and args.layer.isdigit():
+            rc = validate(full, layer_num=int(args.layer))
+        else:
+            rc = validate(full, scope=args.query if args.query else None)
+        sys.exit(rc)
+
+    if args.build:
+        if not args.query:
+            print("用法: python3 graph_query.py -b <节点id> [--text \"详细文本\"]")
+            print("     缺省打开 $EDITOR（缺省 vim）编辑临时文件，保存退出后写入 NodeDetails.toml")
+            sys.exit(1)
+        sys.exit(build_detail(args.query, args.text))
 
     layer_num = args.layer if args.layer and args.layer.isdigit() else None
     arch = args.layer if args.layer in ARCH_LAYERS else None
@@ -318,7 +529,7 @@ def main():
             print("\n可查节点（模块/簇）：")
         for n in sorted(nodes, key=lambda x: x["id"]):
             if n["kind"] in ("module", "cluster"):
-                print(f"  {n['id']}  {n.get('desc', '')[:44]}")
+                print(f"  {n['id']}  {n.get('desc', '')}")
         return
 
     matches = fuzzy_find(nodes, q)
@@ -330,7 +541,7 @@ def main():
         print(f"匹配 {len(matches)} 个节点（List 模式）：")
         for m in matches:
             n = node_map.get(m, {})
-            print(f"  {m}  [{n.get('kind', '?')}]  path= {ppath(n) or '-'}  {n.get('desc', '')[:36]}")
+            print(f"  {m}  [{n.get('kind', '?')}]  path= {ppath(n) or '-'}  {n.get('desc', '')}")
         return
     if args.callchain:
         target = matches[0]
@@ -344,6 +555,8 @@ def main():
     if not (args.callchain or args.callers):
         for m in matches:
             show(m, data, arch, args.explain)
+        if args.detail:
+            show_detail(matches[0], data)
 
 
 if __name__ == "__main__":
