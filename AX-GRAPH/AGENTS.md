@@ -10,17 +10,27 @@
 - **定位决策（2026-08-28，不可推翻）：原型、手动挡**。构建图的过程 = 读源码学习的过程。**拒绝引入 tree-sitter / MCP / SQLite 等自动化工具体系**（同类项目 colbymchenry/codegraph 已调研，明确不采纳）。你是学习者不是生产者——任何"我帮你全自动建图"的冲动都是错的。
 - 当前状态：三层建成，4 个图文件，合并 119 节点 / 239 边 / 0 悬空（2026-08-29）。
 
-## 2. 目录文件清单
+## 2. 目录结构（base 多库体系，2026-08-31）
+
+```
+AX-GRAPH/
+├── graph_query.py / purity.py / SCHEMA.md / AGENTS.md   # 工具+约定，全局共享
+├── .active-base                        # 默认 base（每次 --base 切换自动更新）
+├── base-dir-<项目名>/                  # 项目图（type=dir）：Layer-*.toml + NodeDetails.toml + base.toml
+└── base-file-<文件名>/                 # 单文件图（type=file）：Layer-1-Graph.toml + base.toml
+```
+
+- `base.toml` 存元信息：type / source（指向哪）/ repo（path 解析基准）
+- 所有命令默认操作 **当前默认 base**（.active-base 决定）；--base 切换即更新默认
+- `--file <文件>` 自动关联 base-file-<stem>/（不存在则初始化）
 
 | 文件 | 作用 |
 |---|---|
-| `Layer-1-Graph.toml` | 源码级分布：模块（12）+ 顶层散落文件 + hermes_cli 展开第一批 |
-| `Layer-2-Graph.toml` | 簇级：agent 模块 4 个隐式簇 + 平铺未归簇文件 |
-| `Layer-3-Graph-skill_load.toml` | 功能级：运行时 skill 加载链（/skills 命令、载荷加载） |
-| `Layer-3-Graph-skill_startup.toml` | 功能级：hermes 入口 → 技能索引注入 system prompt（启动链） |
-| `graph_query.py` | 查询 + 校验工具（自动合并所有 Layer-*.toml） |
+| `graph_query.py` | 查询 + 校验 + base 管理 + --purity/--file 转发 |
+| `purity.py` | 函数纯度分析（--purity 支线）：L0严格纯/L1工程纯/非纯 + 证据清单；一层调用者传递；只读不写盘 |
 | `SCHEMA.md` | **编辑手册**：节点/边必填字段、命名规则、示例。新增节点前必读 |
-| `NodeDetails.toml` | 节点详细介绍（KV：节点id → 多行读码笔记），由 `-b` 维护 |
+| `NodeDetails.toml` | 节点详细介绍（KV：节点id → 多行读码笔记），由 `-b` 维护（**在 base 目录内**） |
+| `TODO.md` | **未来规划**：行号漂移的辅助手动更新（--suggest 单点 → 列表 → 全量报告）。改动工具前先看它 |
 | `call_candidates.py` | CALLS 候选提取脚本（AST 提取调用+调用点行号，人工确认后入图） |
 | `usage-skill-load.md` | skill-load 功能链的实战记录（模板参考） |
 
@@ -40,11 +50,16 @@
 ## 4. 查询速查（graph_query.py）
 
 ```bash
-python3 graph_query.py <id或关键词>            # 查节点：详情 + 出边 + 入边
+python3 graph_query.py <id或关键词>            # 查节点：详情 + 出边 + 入边（当前默认 base）
+python3 graph_query.py --bases                # 列出全部 base（* 当前默认）
+python3 graph_query.py --base <base名>         # 切换 base（同时设为默认，写入 .active-base）
+python3 graph_query.py --new-base dir <路径>   # 新建项目 base（base-dir-<名>）
+python3 graph_query.py --new-base file <文件>  # 新建单文件 base（AST 自动建图）
 python3 graph_query.py <id> -c                 # 调用链展开（树形 + 调用点行号，可跳转）
 python3 graph_query.py <id> -r                 # 反向调用链（谁在调用我）
 python3 graph_query.py <id> -e                 # 关系人话解读
 python3 graph_query.py <id> -d                 # 末尾显示该节点详细介绍（NodeDetails.toml）
+python3 graph_query.py --purity <id>           # 函数纯度分析（L0/L1/非纯 + 证据；一层调用者传递；只读不写盘）
 python3 graph_query.py -b <id>                 # 构建/编辑详细介绍：打开 $EDITOR(vim) 编辑临时文件，保存退出自动写入
 python3 graph_query.py -b <id> --text "..."    # 直写详细介绍（AI/脚本友好）；空文本=删除该详情
 python3 graph_query.py <关键词> -s             # List 模式（只列匹配不展开）
@@ -60,9 +75,10 @@ python3 graph_query.py <id> -l core            # 只看 core 架构层
 ## 5. 协作铁律（违反会被打回）
 
 1. **行号当次 grep 实测，不凭记忆**。源码更新行号会漂移（`skill_commands.py` 的 `_load_skill_payload` 曾 725→138）。函数行号用 `grep -nE '^\s*(async )?def |^\s*class '` 当次核对。
-2. **关系实测不编造**。DEPENDS_ON 的 weight=import 计数；CALLS 的 at_line=调用点行号；测不了就标 `note = "待验证"`，不许硬写。
-3. **复用已有节点 id，不重复定义**。重复定义 = 后加载的覆盖先加载的。先 `python3 graph_query.py <名称>` 查一下节点存不存在。
-4. **增删节点后必须跑 `--validate`，0 Error 才能收工**。全量跑有历史欠账 Warning 是正常的，不许顺手"清理"旧数据（那是人决定的事）。
+2. **更新图 = 人在回路 + 必须阅读理解代码**。AI 可以执行更新（发现漂移、给建议、按指挥改图），但必须**有人发起和确认**；且任何更新都必须**先读该节点对应源码、理解其当前实现**再改——改图是读码的副产品，不是机械改数字。禁止：①无人值守的全量自动重建；②不看代码直接改数字（哪怕数字来自工具建议）。发现漂移时：报告给人 → 等人指挥 → 读码理解 → 执行 → 验证。
+3. **关系实测不编造**。DEPENDS_ON 的 weight=import 计数；CALLS 的 at_line=调用点行号；测不了就标 `note = "待验证"`，不许硬写。
+4. **复用已有节点 id，不重复定义**。重复定义 = 后加载的覆盖先加载的。先 `python3 graph_query.py <名称>` 查一下节点存不存在。
+5. **增删节点后必须跑 `--validate`，0 Error 才能收工**。全量跑有历史欠账 Warning 是正常的，不许顺手"清理"旧数据（那是人决定的事）。
 
 ## 6. 新增节点的标准流程
 

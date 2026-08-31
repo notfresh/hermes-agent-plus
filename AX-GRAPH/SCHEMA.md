@@ -21,8 +21,8 @@
 | 字段 | 必填 | 说明 |
 |---|---|---|
 | `id` | ✅ 必填 | 全局唯一。命名前缀表意（见 §3），重复定义会覆盖！ |
-| `kind` | ✅ 必填 | 取值：`module` / `file` / `cluster` / `subpackage` / `feature` / `function` |
-| `path` | ✅ 必填 | 相对仓库根路径。**function 必须带 `:行号`**（如 `agent/skill_utils.py:797`）；file/module 不带 |
+| `kind` | ✅ 必填 | 取值：`module` / `file` / `cluster` / `subpackage` / `feature` / `function` / `constants` |
+| `path` | ✅ 必填 | 相对仓库根路径。**function/constants 必须带 `:行号`**（如 `agent/skill_utils.py:27`）；file/module/cluster/subpackage/feature 不带 |
 | `layer` | ✅ 必填 | 取值：`core` / `capability` / `interface` / `application` / `entry` / `infra` |
 | `desc` | ✅ 建议必填 | 一句话职责。查询工具展示全靠它，空 desc = 查询工具显示空白 |
 | `note` | 可选 | 补充说明（跨文件引用、实测依据等） |
@@ -47,6 +47,7 @@
 | `func.` | `<路径去扩展名>.<函数名>` | `func.agent.skill_utils.iter_skill_index_files` |
 | `func.`（类） | 类节点用类名 | `func.tools.skills_hub.SkillMeta` |
 | `file.` | `<模块>.<文件名>`（点分割） | `file.hermes_cli.main`、`file.agent.system_prompt` |
+| `const.` | `<路径去扩展名>.<常量名>` | `const.agent.skill_utils.EXCLUDED_SKILL_DIRS` |
 | `feature.` | `<功能名>`（第三层每功能一文件） | `feature.skill-startup` |
 | `mod.` | 模块 | `mod.agent` |
 | `cluster.` | `<模块>.<簇名>`（第二层） | `cluster.agent.adapters` |

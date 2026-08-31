@@ -129,15 +129,55 @@ kind = "function"
 path = "agent/skill_preprocessing.py:25"
 desc = "读取技能相关配置"
 
-# --- agent/skill_utils.py ---
+# --- agent/skill_utils.py 常量 ---
+
+[[nodes]]  # 节点 const.agent.skill_utils.EXCLUDED_SKILL_DIRS: 排除目录常量
+id = "const.agent.skill_utils.EXCLUDED_SKILL_DIRS"
+kind = "constants"
+path = "agent/skill_utils.py:27"
+layer = "core"
+desc = "排除目录 frozenset：.git/.venv/node_modules 等 VCS/venv/cache 元目录；iter_skill_index_files 遍历时排除"
+
+[[nodes]]  # 节点 const.agent.skill_utils.SKILL_SUPPORT_DIRS: 技能支撑目录常量
+id = "const.agent.skill_utils.SKILL_SUPPORT_DIRS"
+kind = "constants"
+path = "agent/skill_utils.py:50"
+layer = "core"
+desc = "技能支撑目录 frozenset：references/templates/assets/scripts；遍历时保留但不作为独立技能根"
+
+# --- agent/skill_utils.py 函数 ---
+
+[[nodes]]  # 节点 func.agent.skill_utils.get_external_skills_dirs: 读 external_dirs 配置
+id = "func.agent.skill_utils.get_external_skills_dirs"
+kind = "function"
+path = "agent/skill_utils.py:432"
+layer = "core"
+desc = "读 config.yaml skills.external_dirs，返回存在且非本地的目录列表（~和${VAR}展开，mtime 缓存）"
 
 [[nodes]]  # 节点 func.agent.skill_utils.iter_skill_index_files: 技能发现统一入口（os.walk 穿透 symlink）
 id = "func.agent.skill_utils.iter_skill_index_files"
 kind = "function"
 path = "agent/skill_utils.py:797"
+layer = "core"
 desc = "技能发现统一入口：os.walk(followlinks=True) 枚举 SKILL.md；全库技能发现的窄腰（#75130 修复点）"
 
-# --- tools/skills_tool.py ---
+# --- tools/skills_tool.py 常量 ---
+
+[[nodes]]  # 节点 const.tools.skills_tool.SKILLS_DIR: 技能主目录常量
+id = "const.tools.skills_tool.SKILLS_DIR"
+kind = "constants"
+path = "tools/skills_tool.py:143"
+layer = "core"
+desc = "技能主目录常量：HERMES_HOME / 'skills'（profile-aware）；skill_view/scan 等所有路径基准"
+
+# --- tools/skills_tool.py 函数 ---
+
+[[nodes]]  # 节点 func.tools.skills_tool._skills_dir: 运行时 profile-aware 技能目录
+id = "func.tools.skills_tool._skills_dir"
+kind = "function"
+path = "tools/skills_tool.py:147"
+layer = "core"
+desc = "运行时返回当前 profile 的技能目录；处理模块早于 profile 导入的场景（live HERMES_HOME 而非导入时缓存值）"
 
 [[nodes]]  # 节点 func.tools.skills_tool._find_all_skills: 发现全部技能
 id = "func.tools.skills_tool._find_all_skills"
@@ -268,7 +308,32 @@ rel = "CONTAINS"
 
 [[edges]]
 from = "file.agent.skill_utils"
+to = "const.agent.skill_utils.EXCLUDED_SKILL_DIRS"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_utils"
+to = "const.agent.skill_utils.SKILL_SUPPORT_DIRS"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_utils"
+to = "func.agent.skill_utils.get_external_skills_dirs"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.skill_utils"
 to = "func.agent.skill_utils.iter_skill_index_files"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skills_tool"
+to = "const.tools.skills_tool.SKILLS_DIR"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skills_tool"
+to = "func.tools.skills_tool._skills_dir"
 rel = "CONTAINS"
 
 [[edges]]
@@ -416,6 +481,12 @@ from = "func.agent.skill_commands.scan_skill_commands"
 to = "func.tools.skills_tool._parse_frontmatter"
 rel = "CALLS"
 
+[[edges]]  # 技能发现 → 运行时 profile-aware 目录
+at_line = 571
+from = "func.tools.skills_tool._find_all_skills"
+to = "func.tools.skills_tool._skills_dir"
+rel = "CALLS"
+
 [[edges]]  # 技能发现 → 遍历入口
 at_line = 721  # 调用点行号
 from = "func.tools.skills_tool._find_all_skills"
@@ -457,7 +528,19 @@ from = "file.tools.skills_tool"
 to = "func.tools.skills_tool.skill_view"
 rel = "CONTAINS"
 
+[[edges]]  # 技能视图 → 发现全部技能（兜底未找到时提供候选项）
+at_line = 1210
+from = "func.tools.skills_tool.skill_view"
+to = "func.tools.skills_tool._find_all_skills"
+rel = "CALLS"
+
 [[edges]]  # skill_view 实现 skill-load（汇聚点）
 from = "feature.skill-load"
 to = "func.tools.skills_tool.skill_view"
 rel = "REALIZED_BY"
+
+[[edges]]  # 目录聚合 → 外部目录读取（跨图引用 get_all_skills_dirs 定义在 skill_startup）
+at_line = 522
+from = "func.agent.skill_utils.get_all_skills_dirs"
+to = "func.agent.skill_utils.get_external_skills_dirs"
+rel = "CALLS"

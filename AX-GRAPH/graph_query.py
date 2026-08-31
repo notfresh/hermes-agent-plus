@@ -22,10 +22,65 @@ import argparse
 from pathlib import Path
 
 BASE = Path(__file__).parent
-REPO = BASE.parent  # 图目录 AX-GRAPH 的上级 = 仓库根（节点 path 是相对仓库根的！）
+ACTIVE_FILE = BASE / ".active-base"
 ARCH_LAYERS = {"core", "interface", "capability", "application", "entry", "infra"}
-VALID_KINDS = {"module", "file", "cluster", "subpackage", "feature", "function"}
+VALID_KINDS = {"module", "file", "cluster", "subpackage", "feature", "function", "constants"}
 VALID_RELS = {"CONTAINS", "DEPENDS_ON", "REALIZED_BY", "CALLS"}
+
+
+# ── base 管理（多库体系，类似 select database）──
+
+def get_active_base() -> str:
+    """当前默认 base（.active-base 记录，缺省 base-dir-hermes_agent）。"""
+    try:
+        name = ACTIVE_FILE.read_text(encoding="utf-8").strip()
+        if name and (BASE / name).is_dir():
+            return name
+    except Exception:
+        pass
+    return "base-dir-hermes_agent"
+
+
+def set_active_base(name: str) -> None:
+    """切换默认 base（持久化到 .active-base）。"""
+    ACTIVE_FILE.write_text(name, encoding="utf-8")
+
+
+def base_dir(name: str = None) -> Path:
+    """指定 base 的目录（缺省=当前默认）。"""
+    return BASE / (name or get_active_base())
+
+
+def get_base_meta(name: str = None) -> dict:
+    """读 base.toml 元信息（type/source/repo/desc），缺失返回默认。"""
+    bd = base_dir(name)
+    meta = {"type": "dir", "source": "", "repo": ""}
+    meta_file = bd / "base.toml"
+    if meta_file.exists():
+        try:
+            with open(meta_file, "rb") as f:
+                m = tomllib.load(f).get("base", {})
+            meta.update(m)
+        except Exception:
+            pass
+    if not meta.get("repo"):
+        meta["repo"] = str(Path(__file__).parent.parent)
+    return meta
+
+
+def get_repo(name: str = None) -> Path:
+    """当前 base 的仓库根（节点 path 相对它解析）。"""
+    return Path(get_base_meta(name).get("repo", str(Path(__file__).parent.parent)))
+
+
+def list_bases() -> list:
+    """列出全部 base（base-* 目录 + 元信息）。"""
+    out = []
+    for d in sorted(BASE.glob("base-*")):
+        if d.is_dir():
+            meta = get_base_meta(d.name)
+            out.append((d.name, meta))
+    return out
 def ppath(node):
     """path 输出统一 ./ 前缀（VSCode Ctrl+点击跳转友好）"""
     p = node.get("path") if node else None
@@ -41,9 +96,10 @@ def ploc(path, at):
 
 
 def load(layer_num=None):
-    """合并加载同目录所有 Layer-*-Graph.toml；layer_num 指定时只加载对应文件"""
+    """合并加载当前 base 目录所有 Layer-*-Graph.toml；layer_num 指定时只加载对应文件。"""
     data = {"nodes": [], "edges": []}
-    files = sorted(BASE.glob("Layer-*.toml"))
+    bd = base_dir()
+    files = sorted(bd.glob("Layer-*.toml"))
     if layer_num is not None:
         files = [p for p in files if p.name.startswith(f"Layer-{layer_num}-Graph")]
     for p in files:
@@ -240,22 +296,25 @@ def show_callers(nid, data):
 from collections import Counter
 
 
-DETAILS_FILE = BASE / "NodeDetails.toml"
+def details_file() -> Path:
+    """当前 base 的 NodeDetails.toml。"""
+    return base_dir() / "NodeDetails.toml"
 
 
 def load_details():
-    """加载 NodeDetails.toml（KV：节点id → 详细介绍文本）。不存在返回 {}。"""
-    if not DETAILS_FILE.exists():
+    """加载当前 base 的 NodeDetails.toml（KV：节点id → 详细介绍文本）。不存在返回 {}。"""
+    df = details_file()
+    if not df.exists():
         return {}
     try:
-        with open(DETAILS_FILE, "rb") as f:
+        with open(df, "rb") as f:
             return tomllib.load(f).get("details", {})
     except Exception:
         return {}
 
 
 def save_details(details):
-    """写 NodeDetails.toml（多行字符串字面量，KV 形式）。"""
+    """写当前 base 的 NodeDetails.toml（多行字符串字面量，KV 形式）。"""
     lines = [
         "# 节点详细介绍（KV：节点id → 多行 markdown 读码笔记）",
         "# 由 graph_query.py -b 维护（vim 编辑），勿手改格式",
@@ -268,7 +327,7 @@ def save_details(details):
         lines.append(v)
         lines.append('"""')
         lines.append("")
-    DETAILS_FILE.write_text("\n".join(lines), encoding="utf-8")
+    details_file().write_text("\n".join(lines), encoding="utf-8")
 
 
 def build_detail(nid, text=None):
@@ -400,7 +459,7 @@ def validate(data, scope=None, layer_num=None):
             errors.append(f"[详情] NodeDetails.toml 的 key 悬空（非合法节点）: {k}")
 
     if layer_num is not None:
-        layer_names = {p.name for p in BASE.glob("Layer-*.toml") if p.name.startswith(f"Layer-{layer_num}-Graph")}
+        layer_names = {p.name for p in base_dir().glob("Layer-*.toml") if p.name.startswith(f"Layer-{layer_num}-Graph")}
         scope_nodes = {nid: n for nid, n in nodes_all.items() if n.get("source") in layer_names}
         scope_edges = [e for e in edges_all if e.get("source") in layer_names]
         scope_desc = f"第 {layer_num} 层文件"
@@ -439,7 +498,7 @@ def validate(data, scope=None, layer_num=None):
         p = n.get("path")
         if p:
             filepart = re.sub(r":\d+$", "", p)
-            full = REPO / filepart
+            full = get_repo() / filepart
             if not full.exists():
                 errors.append(f"[节点] {nid} path 不存在: {p}")
             else:
@@ -448,7 +507,7 @@ def validate(data, scope=None, layer_num=None):
                     ln = int(m.group(1))
                     lines = full.read_text(encoding="utf-8").splitlines()
                     target = lines[ln - 1] if ln <= len(lines) else ""
-                    if not re.search(r"def |class |async def ", target):
+                    if kind == "function" and not re.search(r"def |class |async def ", target):
                         errors.append(f"[节点] {nid} 行号 {ln} 不是 def/class: {target.strip()[:50]}")
 
     for e in scope_edges:
@@ -474,6 +533,131 @@ def validate(data, scope=None, layer_num=None):
     return 0
 
 
+def resolve_src_path(filepath: str):
+    """解析源码文件路径：绝对 → cwd → AX-GRAPH(BASE) → 仓库根。返回 Path 或 None。"""
+    p = Path(filepath)
+    if p.is_absolute():
+        return p if p.exists() else None
+    for cand in (Path.cwd() / p, BASE / p, get_repo() / p):
+        if cand.exists():
+            return cand
+    return None
+
+
+def init_file_graph(filepath: str) -> int:
+    """为单个源码文件初始化 graph-for-<basename>.toml（AST 扫描顶层函数/类 + CALLS 边）。
+    已存在则跳过（--file 查询时自动加载）。只读源码，生成图文件。"""
+    import ast as _ast
+
+    p = resolve_src_path(filepath)
+    if p is None:
+        print(f"文件不存在: {filepath}（查找范围: 当前目录 / AX-GRAPH / 仓库根）")
+        return 1
+    try:
+        rel = str(p.resolve().relative_to(get_repo().resolve()))
+    except ValueError:
+        rel = filepath
+    out = BASE / f"base-file-{p.stem}" / "Layer-1-Graph.toml"
+    if out.exists():
+        print(f"图已存在: base-file-{p.stem}/Layer-1-Graph.toml（--file 查询时自动加载；重建请删除目录后重跑）")
+        return 0
+    out.parent.mkdir(exist_ok=True)
+
+    src = p.read_text(encoding="utf-8")
+    try:
+        tree = _ast.parse(src)
+    except SyntaxError as e:
+        print(f"解析失败: {e}")
+        return 1
+
+    # 顶层定义（函数/异步函数/类）
+    defs = []
+    for n in tree.body:
+        if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef, _ast.ClassDef)):
+            doc = ""
+            if n.body and isinstance(n.body[0], _ast.Expr) and isinstance(n.body[0].value, _ast.Constant) and isinstance(n.body[0].value.value, str):
+                doc = n.body[0].value.value.strip().split("\n")[0][:60]
+            defs.append((n.name, n.lineno, doc))
+
+    # CALLS：函数体内调用其他顶层定义（Name 调用，行号实测）
+    top_names = {n[0] for n in defs}
+    calls = []
+    for name, _ln, _doc in defs:
+        fn = next(n for n in tree.body if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef, _ast.ClassDef)) and n.name == name)
+        if isinstance(fn, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+            for node in _ast.walk(fn):
+                if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name) and node.func.id in top_names and node.func.id != name:
+                    calls.append((name, node.func.id, node.lineno))
+
+    # 生成 TOML
+    mod = p.stem
+    lines = [
+        "# ============================================================",
+        f"# 单文件图 — {rel}",
+        "# 由 graph_query.py --file 自动初始化（AST 扫描），节点可手动扩充",
+        "# ============================================================",
+        "",
+        "[graph]",
+        f'name = "graph for {rel}"',
+        'layer = 3',
+        'granularity = "单文件图（文件+顶层函数+函数间CALLS）"',
+        f'created = "2026-08-29"',
+        f'source = "{rel}"',
+        "",
+        f'[[nodes]]  # 节点 file.{mod}: 文件本身',
+        f'id = "file.{mod}"',
+        'kind = "file"',
+        f'path = "{rel}"',
+        'layer = "infra"',
+        f'desc = "{rel}"',
+        "",
+    ]
+    for name, ln, doc in defs:
+        lines += [
+            f'[[nodes]]  # 节点 func.{mod}.{name}: 顶层定义',
+            f'id = "func.{mod}.{name}"',
+            'kind = "function"',
+            f'path = "{rel}:{ln}"',
+            'layer = "core"',
+            f'desc = "{doc or "（无 docstring）"}"',
+            "",
+        ]
+    lines += ["# 边：CONTAINS（函数归属文件）", ""]
+    for name, _ln, _doc in defs:
+        lines += ["[[edges]]", f'from = "file.{mod}"', f'to = "func.{mod}.{name}"', 'rel = "CONTAINS"', ""]
+    if calls:
+        lines += ["# 边：CALLS（函数间调用，AST 实测行号）", ""]
+        for f, t, ln in sorted(calls):
+            lines += ["[[edges]]", f"at_line = {ln}", f'from = "func.{mod}.{f}"', f'to = "func.{mod}.{t}"', 'rel = "CALLS"', ""]
+    out.write_text("\n".join(lines), encoding="utf-8")
+    # base 元信息
+    (out.parent / "base.toml").write_text(
+        f'[base]\ntype = "file"\nsource = "{rel}"\nrepo = "{get_repo()}"\ndesc = "单文件图：{rel}"\n',
+        encoding="utf-8",
+    )
+    print(f"✓ 已初始化 base-file-{p.stem}：{len(defs)} 个顶层定义 / {len(calls)} 条 CALLS 边")
+    print(f"  查询: python3 graph_query.py --file {filepath} <节点id>")
+    return 0
+
+
+def load_file_graph(filepath: str) -> dict:
+    """加载 base-file-<stem>/ 下全部 Layer-*.toml；不存在返回空数据。"""
+    bd = BASE / f"base-file-{Path(filepath).stem}"
+    if not bd.is_dir():
+        return {"nodes": [], "edges": []}
+    data = {"nodes": [], "edges": []}
+    for p in sorted(bd.glob("Layer-*.toml")):
+        with open(p, "rb") as f:
+            d = tomllib.load(f)
+        for n in d.get("nodes", []):
+            n["source"] = p.name
+        for e in d.get("edges", []):
+            e["source"] = p.name
+        data["nodes"].extend(d.get("nodes", []))
+        data["edges"].extend(d.get("edges", []))
+    return data
+
+
 def main():
     parser = argparse.ArgumentParser(description="X-GRAPH 查询：查看节点第一层外围")
     parser.add_argument("query", nargs="?", help="节点 id 或关键词")
@@ -486,7 +670,51 @@ def main():
     parser.add_argument("-d", "--detail", action="store_true", help="查询时在末尾显示该节点的详细介绍（NodeDetails.toml）")
     parser.add_argument("--text", help="配合 -b：直接写入的详细介绍文本（多行用 \\n）")
     parser.add_argument("--validate", action="store_true", help="图完整性校验：悬空边/path/行号/字段/详情key。范围=全部；配 -l 数字=某层文件；带关键词=匹配节点及其边")
+    parser.add_argument("--purity", action="store_true", help="函数纯度分析：L0严格纯/L1工程纯/非纯/待验证 + 证据清单；一层调用者传递；只读不写盘（转发 purity.py）")
+    parser.add_argument("--file", help="指定目标源码文件：自动初始化/加载 base-file-<stem>/ 单文件图，并作为查询/分析范围（可与 --purity 组合）")
+    parser.add_argument("--base", help="切换并查询指定 base（同时设为默认，写入 .active-base）")
+    parser.add_argument("--bases", action="store_true", help="列出全部 base（当前默认打 *）")
+    parser.add_argument("--new-base", nargs=2, metavar=("TYPE", "PATH"), help="新建 base：dir <项目路径> | file <源码文件>")
     args = parser.parse_args()
+
+    # base 管理：--bases / --new-base / --base 优先处理（切换后影响后续所有加载）
+    if args.bases:
+        active = get_active_base()
+        print(f"当前默认: {active}\n")
+        for name, meta in list_bases():
+            mark = "*" if name == active else " "
+            print(f"{mark} {name}  [{meta.get('type')}] source={meta.get('source')}  {meta.get('desc', '')}")
+        sys.exit(0)
+    if args.new_base:
+        typ, path = args.new_base
+        if typ == "dir":
+            src = Path(path).expanduser().resolve()
+            if not src.is_dir():
+                print(f"目录不存在: {path}")
+                sys.exit(1)
+            name = f"base-dir-{src.name}"
+            bd = BASE / name
+            if bd.exists():
+                print(f"已存在: {name}")
+                sys.exit(1)
+            bd.mkdir()
+            (bd / "base.toml").write_text(
+                f'[base]\ntype = "dir"\nsource = "{src}"\nrepo = "{src}"\ndesc = "项目图：{src.name}"\n',
+                encoding="utf-8",
+            )
+            print(f"✓ 新建 base {name}（空图；手动加 Layer-*.toml，或 --new-base file 建单文件图）")
+            sys.exit(0)
+        elif typ == "file":
+            sys.exit(init_file_graph(path))
+        else:
+            print("用法: --new-base dir <项目路径> | --new-base file <源码文件>")
+            sys.exit(1)
+    if args.base:
+        if not (BASE / args.base).is_dir():
+            print(f"未知 base: {args.base}（--bases 查看全部）")
+            sys.exit(1)
+        set_active_base(args.base)
+        print(f"已切换默认 base → {args.base}")
 
     if args.validate:
         # 校验始终基于全量图（跨文件引用合法），范围控制：-l 层文件 / 关键词节点集
@@ -496,6 +724,34 @@ def main():
         else:
             rc = validate(full, scope=args.query if args.query else None)
         sys.exit(rc)
+
+    if args.purity:
+        if args.file:
+            # 文件模式：批量分析该文件全部顶层函数（不依赖图节点）
+            init_file_graph(args.file)
+            try:
+                from purity import purity_file_main
+            except ImportError:
+                print("缺少 purity.py（应在 AX-GRAPH 目录内）")
+                sys.exit(1)
+            sys.exit(purity_file_main(args.file, args.query if args.query else None))
+        # 节点模式（默认项目图）
+        full = load()
+        if not args.query:
+            print("用法: python3 graph_query.py --purity <节点id或关键词>")
+            print("     纯度分级：L0 严格纯 / L1 工程纯(读全局无副作用) / 非纯 / 待验证")
+            print("     或: python3 graph_query.py --purity --file <源码文件> [函数名]")
+            sys.exit(1)
+        matches = fuzzy_find(full["nodes"], args.query)
+        if not matches:
+            print(f"未找到匹配: {args.query}")
+            sys.exit(1)
+        try:
+            from purity import purity_main
+        except ImportError:
+            print("缺少 purity.py（应在 AX-GRAPH 目录内）")
+            sys.exit(1)
+        sys.exit(purity_main(matches[0], full))
 
     if args.build:
         if not args.query:
@@ -511,6 +767,12 @@ def main():
         return
 
     data = load(layer_num)
+    if args.file:
+        # --file：确保目标文件的单文件图存在并合并进查询范围
+        init_file_graph(args.file)
+        fg = load_file_graph(args.file)
+        data["nodes"].extend(fg["nodes"])
+        data["edges"].extend(fg["edges"])
     nodes = data["nodes"]
     if arch:
         nodes = [n for n in nodes if n.get("layer") == arch]

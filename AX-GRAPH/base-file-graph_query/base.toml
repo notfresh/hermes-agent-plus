@@ -1,0 +1,5 @@
+[base]
+type = "file"
+source = "AX-GRAPH/graph_query.py"
+repo = "/root/projects/hermes-agent-plus"
+desc = "AX-GRAPH 查询工具单文件图"

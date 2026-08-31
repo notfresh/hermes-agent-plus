@@ -11,8 +11,27 @@
 
 
 
+
+"""
+
+"func.agent.skill_commands._load_skill_payload" = """
+## 参数
+
+- `skill_identifier: str` — skill 名称或路径（支持相对路径和 normalize 后的形式）
+- `task_id: str | None` — 可选任务标识，透传给 skill_view
+
+## 返回
+
+`tuple[dict[str, Any], Path | None, str] | None`
+- `(loaded_payload, skill_dir, display_name)` — 成功
+- `None` — 未找到或解析失败
+
+## 职责
+
+根据 skill_identifier 查找并加载 skill，返回原始载荷 dict、所在目录和展示名称；内部委托 skill_view（preprocess=False）读取 SKILL.md 全文。
 """
 
 "func.agent.system_prompt.build_system_prompt" = """
 abcdefg
+
 """
