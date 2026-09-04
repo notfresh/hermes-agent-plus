@@ -670,7 +670,12 @@ def main():
     parser.add_argument("-d", "--detail", action="store_true", help="查询时在末尾显示该节点的详细介绍（NodeDetails.toml）")
     parser.add_argument("--text", help="配合 -b：直接写入的详细介绍文本（多行用 \\n）")
     parser.add_argument("--validate", action="store_true", help="图完整性校验：悬空边/path/行号/字段/详情key。范围=全部；配 -l 数字=某层文件；带关键词=匹配节点及其边")
-    parser.add_argument("--purity", action="store_true", help="函数纯度分析：L0严格纯/L1工程纯/非纯/待验证 + 证据清单；一层调用者传递；只读不写盘（转发 purity.py）")
+    parser.add_argument("-p", "--purity", action="store_true", help="函数纯度分析：L0严格纯/L1工程纯/非纯/待验证 + 证据清单；一层调用者传递；只读不写盘（转发 purity.py）")
+    parser.add_argument("--diagnose", action="store_true", help="功能链诊断（feature.*）：判断是否符合「高内聚低耦合」，输出客观指标+证据+建议；只读不写盘（转发 diagnose.py）")
+    parser.add_argument("-u", "--update", action="store_true", help="按节点更新图（仅 func.*）：默认 dry-run 打印 diff；--apply 才真写（改前+改后 validate）")
+    parser.add_argument("--apply", action="store_true", help="配合 --update：真正写盘（默认 dry-run 不写）")
+    parser.add_argument("--force", action="store_true", help="配合 --update --apply：跳过改前 validate（用于修本身就报错的图：行号漂移正是要修的目标）")
+    parser.add_argument("--json", action="store_true", help="配合 --diagnose：输出结构化 JSON（给 AI/脚本消费），非人类阅读格式")
     parser.add_argument("--file", help="指定目标源码文件：自动初始化/加载 base-file-<stem>/ 单文件图，并作为查询/分析范围（可与 --purity 组合）")
     parser.add_argument("--base", help="切换并查询指定 base（同时设为默认，写入 .active-base）")
     parser.add_argument("--bases", action="store_true", help="列出全部 base（当前默认打 *）")
@@ -752,6 +757,46 @@ def main():
             print("缺少 purity.py（应在 AX-GRAPH 目录内）")
             sys.exit(1)
         sys.exit(purity_main(matches[0], full))
+
+    if args.diagnose:
+        # 功能链诊断：与 --purity 平行的新支线（只支持 feature.* 节点）
+        full = load()
+        if not args.query:
+            print("用法: python3 graph_query.py --diagnose <feature_id>")
+            print("     例: python3 graph_query.py --diagnose feature.skill-startup")
+            sys.exit(1)
+        matches = fuzzy_find(full["nodes"], args.query)
+        if not matches:
+            print(f"未找到匹配: {args.query}")
+            sys.exit(1)
+        try:
+            from diagnose import diagnose_main
+        except ImportError:
+            print("缺少 diagnose.py（应在 AX-GRAPH 目录内）")
+            sys.exit(1)
+        sys.exit(diagnose_main(matches[0], full, as_json=args.json))
+
+    if args.update:
+        # 按节点更新图（仅 func.*）：默认 dry-run，加 --apply 才真写
+        full = load()
+        if not args.query:
+            print("用法: python3 graph_query.py --update <func_id> [--apply]")
+            print("     例: python3 graph_query.py --update func.graph_query.ppath")
+            print("     默认 dry-run 仅打印 diff；加 --apply 才改盘（改前+改后 validate）")
+            sys.exit(1)
+        matches = fuzzy_find(full["nodes"], args.query)
+        if not matches:
+            print(f"未找到匹配: {args.query}")
+            sys.exit(1)
+        try:
+            from update_graph import update_main
+            from pathlib import Path as _P
+            repo = get_repo()
+            base_root = base_dir()
+        except ImportError:
+            print("缺少 update_graph.py（应在 AX-GRAPH 目录内）")
+            sys.exit(1)
+        sys.exit(update_main(matches[0], full, repo, base_root, apply=args.apply, force=args.force))
 
     if args.build:
         if not args.query:
