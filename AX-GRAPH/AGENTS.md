@@ -5,7 +5,7 @@
 
 ## 1. 这个目录是什么
 
-- **Hermes Agent 源码的"分层代码图"**：用 TOML 存储源码分布、模块抱团关系、功能实现路径，可查询、可审计、可长期积累。
+- **源码的"分层代码图"**：用 TOML 存储源码分布、模块抱团关系、功能实现路径，可查询、可审计、可长期积累。
 - 任务编号 0012，维护者 Hermes（郑旭）。图目录：`hermes-agent-plus/AX-GRAPH/`（2026-08-29 由 X-GRAPH 改名）。
 - **定位决策（2026-08-28，不可推翻）：原型、手动挡**。构建图的过程 = 读源码学习的过程。**拒绝引入 tree-sitter / MCP / SQLite 等自动化工具体系**（同类项目 colbymchenry/codegraph 已调研，明确不采纳）。你是学习者不是生产者——任何"我帮你全自动建图"的冲动都是错的。
 - 当前状态：三层建成，4 个图文件，合并 119 节点 / 239 边 / 0 悬空（2026-08-29）。
@@ -60,6 +60,9 @@ python3 graph_query.py <id> -r                 # 反向调用链（谁在调用�
 python3 graph_query.py <id> -e                 # 关系人话解读
 python3 graph_query.py <id> -d                 # 末尾显示该节点详细介绍（NodeDetails.toml）
 python3 graph_query.py --purity <id>           # 函数纯度分析（L0/L1/非纯 + 证据；一层调用者传递；只读不写盘）
+python3 graph_query.py --diagnose <feature_id>   # 功能链诊断（feature.*）：高内聚低耦合判断 + 客观指标 + 证据 + 建议（第一版：内部依赖密度）；只读不写盘
+python3 graph_query.py --diagnose <feature_id> --json  # 输出结构化 JSON（AI/脚本友好）
+python3 graph_query.py --update <func_id>      # 按节点更新图（仅 func.*）：默认 dry-run 打印 git diff 风格 diff；加 --apply 才真写（改前+改后 validate）；--force 跳过改前 validate（修本就报错的图时用）
 python3 graph_query.py -b <id>                 # 构建/编辑详细介绍：打开 $EDITOR(vim) 编辑临时文件，保存退出自动写入
 python3 graph_query.py -b <id> --text "..."    # 直写详细介绍（AI/脚本友好）；空文本=删除该详情
 python3 graph_query.py <关键词> -s             # List 模式（只列匹配不展开）
