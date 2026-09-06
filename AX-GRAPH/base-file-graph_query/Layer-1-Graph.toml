@@ -17,133 +17,217 @@ path = "AX-GRAPH/graph_query.py"
 layer = "infra"
 desc = "AX-GRAPH/graph_query.py"
 
+[[nodes]]  # 节点 func.graph_query.get_active_base: 顶层定义
+id = "func.graph_query.get_active_base"
+kind = "function"
+path = "AX-GRAPH/graph_query.py:33"
+layer = "core"
+desc = "读取当前默认 base 名称；无效或缺失时返回默认项目 base。"
+
+[[nodes]]  # 节点 func.graph_query.set_active_base: 顶层定义
+id = "func.graph_query.set_active_base"
+kind = "function"
+path = "AX-GRAPH/graph_query.py:44"
+layer = "core"
+desc = "持久化当前默认 base 名称。"
+
+[[nodes]]  # 节点 func.graph_query.base_dir: 顶层定义
+id = "func.graph_query.base_dir"
+kind = "function"
+path = "AX-GRAPH/graph_query.py:49"
+layer = "core"
+desc = "解析指定或当前默认 base 的目录。"
+
+[[nodes]]  # 节点 func.graph_query.get_base_meta: 顶层定义
+id = "func.graph_query.get_base_meta"
+kind = "function"
+path = "AX-GRAPH/graph_query.py:54"
+layer = "core"
+desc = "读取 base.toml 元信息并补齐默认仓库路径。"
+
+[[nodes]]  # 节点 func.graph_query.get_repo: 顶层定义
+id = "func.graph_query.get_repo"
+kind = "function"
+path = "AX-GRAPH/graph_query.py:71"
+layer = "core"
+desc = "取得当前 base 对应的源码仓库根目录。"
+
+[[nodes]]  # 节点 func.graph_query.list_bases: 顶层定义
+id = "func.graph_query.list_bases"
+kind = "function"
+path = "AX-GRAPH/graph_query.py:76"
+layer = "core"
+desc = "列出 AX-GRAPH 下所有 base 及其元信息。"
+
 [[nodes]]  # 节点 func.graph_query.ppath: 顶层定义
 id = "func.graph_query.ppath"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:29"
+path = "AX-GRAPH/graph_query.py:84"
 layer = "core"
 desc = "path 输出统一 ./ 前缀（VSCode Ctrl+点击跳转友好）"
 
 [[nodes]]  # 节点 func.graph_query.ploc: 顶层定义
 id = "func.graph_query.ploc"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:35"
+path = "AX-GRAPH/graph_query.py:90"
 layer = "core"
 desc = "调用点位置输出：./文件:行号"
 
 [[nodes]]  # 节点 func.graph_query.load: 顶层定义
 id = "func.graph_query.load"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:43"
+path = "AX-GRAPH/graph_query.py:98"
 layer = "core"
 desc = "合并加载同目录所有 Layer-*-Graph.toml；layer_num 指定时只加载对应文件。"
 
 [[nodes]]  # 节点 func.graph_query.fuzzy_find: 顶层定义
 id = "func.graph_query.fuzzy_find"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:64"
+path = "AX-GRAPH/graph_query.py:117"
 layer = "core"
 desc = "模糊匹配：%通配（MySQL LIKE）→ 精确 → 包含 → 近似"
 
 [[nodes]]  # 节点 func.graph_query.explain_edge: 顶层定义
 id = "func.graph_query.explain_edge"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:83"
+path = "AX-GRAPH/graph_query.py:136"
 layer = "core"
 desc = "把一条边翻译成中文解释"
 
 [[nodes]]  # 节点 func.graph_query.show: 顶层定义
 id = "func.graph_query.show"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:102"
+path = "AX-GRAPH/graph_query.py:155"
 layer = "core"
 desc = "（无 docstring）"
 
 [[nodes]]  # 节点 func.graph_query.show_callchain: 顶层定义
 id = "func.graph_query.show_callchain"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:150"
+path = "AX-GRAPH/graph_query.py:203"
 layer = "core"
 desc = "从入口节点沿 CALLS 边展开调用链（V2：树形 + 职责摘要 + 调用点行号）"
 
 [[nodes]]  # 节点 func.graph_query.show_callers: 顶层定义
 id = "func.graph_query.show_callers"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:196"
+path = "AX-GRAPH/graph_query.py:249"
 layer = "core"
 desc = "反向调用链：谁在调用我（沿 CALLS 入边向上展开）"
+
+[[nodes]]  # 节点 func.graph_query.details_file: 顶层定义
+id = "func.graph_query.details_file"
+kind = "function"
+path = "AX-GRAPH/graph_query.py:299"
+layer = "core"
+desc = "返回当前 base 的 NodeDetails.toml 路径。"
 
 [[nodes]]  # 节点 func.graph_query.load_details: 顶层定义
 id = "func.graph_query.load_details"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:249"
+path = "AX-GRAPH/graph_query.py:304"
 layer = "core"
 desc = "加载 NodeDetails.toml（KV：节点id → 详细介绍文本）。不存在返回 {}。"
 
 [[nodes]]  # 节点 func.graph_query.save_details: 顶层定义
 id = "func.graph_query.save_details"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:260"
+path = "AX-GRAPH/graph_query.py:316"
 layer = "core"
 desc = "写 NodeDetails.toml（多行字符串字面量，KV 形式）。"
 
 [[nodes]]  # 节点 func.graph_query.build_detail: 顶层定义
 id = "func.graph_query.build_detail"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:277"
+path = "AX-GRAPH/graph_query.py:333"
 layer = "core"
 desc = "-b 构建节点详细介绍：--text 直写；缺省打开 $EDITOR（缺省 vim）编辑临时文件。"
 
 [[nodes]]  # 节点 func.graph_query.show_detail: 顶层定义
 id = "func.graph_query.show_detail"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:333"
+path = "AX-GRAPH/graph_query.py:389"
 layer = "core"
 desc = "-d 显示节点详细介绍（show 模式末尾调用）。"
 
 [[nodes]]  # 节点 func.graph_query.show_feature_callgraph: 顶层定义
 id = "func.graph_query.show_feature_callgraph"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:345"
+path = "AX-GRAPH/graph_query.py:401"
 layer = "core"
 desc = "feature 节点的内部调用图：实现函数之间的 CALLS 关系 + 入口/中间/叶子角色"
 
 [[nodes]]  # 节点 func.graph_query.validate: 顶层定义
 id = "func.graph_query.validate"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:391"
+path = "AX-GRAPH/graph_query.py:447"
 layer = "core"
 desc = "图完整性校验。范围控制：全量 / -l 层文件 / 关键词节点集。"
 
 [[nodes]]  # 节点 func.graph_query.resolve_src_path: 顶层定义
 id = "func.graph_query.resolve_src_path"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:480"
+path = "AX-GRAPH/graph_query.py:536"
 layer = "core"
 desc = "解析源码文件路径：绝对 → cwd → AX-GRAPH(BASE) → 仓库根。返回 Path 或 None。"
 
 [[nodes]]  # 节点 func.graph_query.init_file_graph: 顶层定义
 id = "func.graph_query.init_file_graph"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:491"
+path = "AX-GRAPH/graph_query.py:547"
 layer = "core"
 desc = "为单个源码文件初始化 graph-for-<basename>.toml（AST 扫描顶层函数/类 + CALLS 边）"
 
 [[nodes]]  # 节点 func.graph_query.load_file_graph: 顶层定义
 id = "func.graph_query.load_file_graph"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:581"
+path = "AX-GRAPH/graph_query.py:643"
 layer = "core"
 desc = "加载 graph-for-<basename>.toml；不存在返回空数据。"
 
 [[nodes]]  # 节点 func.graph_query.main: 顶层定义
 id = "func.graph_query.main"
 kind = "function"
-path = "AX-GRAPH/graph_query.py:596"
+path = "AX-GRAPH/graph_query.py:661"
 layer = "core"
 desc = "（无 docstring）"
 
 # 边：CONTAINS（函数归属文件）
+
+[[edges]]
+from = "file.graph_query"
+to = "func.graph_query.get_active_base"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.graph_query"
+to = "func.graph_query.set_active_base"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.graph_query"
+to = "func.graph_query.base_dir"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.graph_query"
+to = "func.graph_query.get_base_meta"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.graph_query"
+to = "func.graph_query.get_repo"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.graph_query"
+to = "func.graph_query.list_bases"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.graph_query"
+to = "func.graph_query.details_file"
+rel = "CONTAINS"
 
 [[edges]]
 from = "file.graph_query"
@@ -238,43 +322,43 @@ rel = "CONTAINS"
 # 边：CALLS（函数间调用，AST 实测行号）
 
 [[edges]]
-at_line = 281
+at_line = 337
 from = "func.graph_query.build_detail"
 to = "func.graph_query.fuzzy_find"
 rel = "CALLS"
 
 [[edges]]
-at_line = 280
+at_line = 336
 from = "func.graph_query.build_detail"
 to = "func.graph_query.load"
 rel = "CALLS"
 
 [[edges]]
-at_line = 288
+at_line = 344
 from = "func.graph_query.build_detail"
 to = "func.graph_query.load_details"
 rel = "CALLS"
 
 [[edges]]
-at_line = 298
+at_line = 354
 from = "func.graph_query.build_detail"
 to = "func.graph_query.save_details"
 rel = "CALLS"
 
 [[edges]]
-at_line = 329
+at_line = 385
 from = "func.graph_query.build_detail"
 to = "func.graph_query.save_details"
 rel = "CALLS"
 
 [[edges]]
-at_line = 496
+at_line = 552
 from = "func.graph_query.init_file_graph"
 to = "func.graph_query.resolve_src_path"
 rel = "CALLS"
 
 [[edges]]
-at_line = 654
+at_line = 806
 from = "func.graph_query.main"
 to = "func.graph_query.build_detail"
 rel = "CALLS"

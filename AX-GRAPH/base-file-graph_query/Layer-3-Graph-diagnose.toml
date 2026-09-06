@@ -1,0 +1,141 @@
+# ============================================================
+# Layer 3 Graph - diagnose 功能链
+# 粒度：功能 + 相关文件 + 实现函数
+# ============================================================
+
+[graph]
+name = "Layer 3 Graph - diagnose 功能链"
+layer = 3
+granularity = "功能级（feature + file + function）"
+created = "2026-09-04"
+note = "诊断只读图中已有 feature.* 的 REALIZED_BY/CALLS 关系，输出内部依赖密度、严重度、证据和下一步建议"
+
+# ============================================================
+# 功能节点
+# ============================================================
+
+[[nodes]]
+id = "feature.diagnose"
+kind = "feature"
+layer = "capability"
+desc = "诊断 feature 功能链的内部依赖密度，并输出结构化指标、证据、严重度与阅读建议"
+note = "只支持 kind=feature 的节点；不修改图或源码"
+
+# ============================================================
+# 文件节点
+# ============================================================
+
+[[nodes]]
+id = "file.diagnose"
+kind = "file"
+path = "AX-GRAPH/diagnose.py"
+layer = "capability"
+desc = "功能链诊断实现：计算内部 CALLS 网络指标并输出人话或 JSON 报告"
+
+# ============================================================
+# 函数节点
+# ============================================================
+
+[[nodes]]
+id = "func.diagnose._short"
+kind = "function"
+path = "AX-GRAPH/diagnose.py:31"
+layer = "capability"
+desc = "将完整函数节点 id 缩短为末段名称，用于诊断证据展示"
+
+[[nodes]]
+id = "func.diagnose.diagnose_internal_density"
+kind = "function"
+path = "AX-GRAPH/diagnose.py:47"
+layer = "capability"
+desc = "分析 feature 实现函数之间的 CALLS 拓扑，计算密度、入口、深度、跨图调用和模块分散度"
+
+[[nodes]]
+id = "func.diagnose._max_call_depth"
+kind = "function"
+path = "AX-GRAPH/diagnose.py:205"
+layer = "capability"
+desc = "从入口函数使用 BFS 计算内部调用链最大深度，并通过 visited 避免环路"
+
+[[nodes]]
+id = "func.diagnose.diagnose_main"
+kind = "function"
+path = "AX-GRAPH/diagnose.py:230"
+layer = "capability"
+desc = "诊断功能入口：校验目标为 feature，调用指标分析并输出人话报告或 JSON"
+
+# ============================================================
+# 边：功能实现关系
+# ============================================================
+
+[[edges]]
+from = "feature.diagnose"
+to = "func.diagnose.diagnose_main"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.diagnose"
+to = "func.diagnose.diagnose_internal_density"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.diagnose"
+to = "func.diagnose._max_call_depth"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.diagnose"
+to = "func.diagnose._short"
+rel = "REALIZED_BY"
+
+# ============================================================
+# 边：文件归属
+# ============================================================
+
+[[edges]]
+from = "file.diagnose"
+to = "func.diagnose._short"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.diagnose"
+to = "func.diagnose.diagnose_internal_density"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.diagnose"
+to = "func.diagnose._max_call_depth"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.diagnose"
+to = "func.diagnose.diagnose_main"
+rel = "CONTAINS"
+
+# ============================================================
+# 边：执行调用关系
+# ============================================================
+
+[[edges]]
+at_line = 777
+from = "func.graph_query.main"
+to = "func.diagnose.diagnose_main"
+rel = "CALLS"
+
+[[edges]]
+at_line = 245
+from = "func.diagnose.diagnose_main"
+to = "func.diagnose.diagnose_internal_density"
+rel = "CALLS"
+
+[[edges]]
+at_line = 103
+from = "func.diagnose.diagnose_internal_density"
+to = "func.diagnose._max_call_depth"
+rel = "CALLS"
+
+[[edges]]
+at_line = 173
+from = "func.diagnose.diagnose_internal_density"
+to = "func.diagnose._short"
+rel = "CALLS"

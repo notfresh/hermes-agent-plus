@@ -1,0 +1,305 @@
+# ============================================================
+# layer-longlife — Hermes Agent 长期架构语义图
+# 来源：仓库根目录 AGENTS.md
+# 节点 = 长期原则/约束/决策/不变量；边 = 规范之间及其源码落点的逻辑关系
+# ============================================================
+
+[graph]
+name = "Layer Longlife Graph - Hermes Agent 长期架构语义"
+layer = "longlife"
+granularity = "项目级长期上下文"
+created = "2026-09-05"
+schema = "principle / constraint / decision / invariant; IMPLIES / PROTECTS / GOVERNS / JUSTIFIES"
+note = "把 AGENTS.md 中长期有效的设计意图连接到已有源码图节点；不替代 CALLS 或 DEPENDS_ON"
+
+# ------------------------------------------------------------
+# 节点：架构原则
+# ------------------------------------------------------------
+
+[[nodes]]
+id = "principle.prompt-caching-sacred"
+kind = "principle"
+path = "AGENTS.md:19"
+layer = "core"
+source = "AGENTS.md:15-22"
+desc = "长生命周期会话必须保持缓存前缀稳定，除上下文压缩外不得重建历史上下文"
+
+[[nodes]]
+id = "principle.narrow-core"
+kind = "principle"
+path = "AGENTS.md:24"
+layer = "core"
+source = "AGENTS.md:20-22"
+desc = "核心保持窄腰，能力优先在 CLI、skill、service-gated tool、plugin 或 MCP 等边缘扩展"
+
+[[nodes]]
+id = "principle.verify-intent-before-fixing"
+kind = "principle"
+path = "AGENTS.md:138"
+layer = "core"
+source = "AGENTS.md:138-180"
+desc = "修复前先验证问题前提和原始设计意图，区分真实缺陷与刻意隔离"
+
+[[nodes]]
+id = "principle.profile-isolation"
+kind = "principle"
+path = "AGENTS.md:1160"
+layer = "core"
+source = "AGENTS.md:1160-1216"
+desc = "每个 profile 是隔离实例，配置、状态、记忆和会话不应隐式串联"
+
+# ------------------------------------------------------------
+# 节点：实现约束
+# ------------------------------------------------------------
+
+[[nodes]]
+id = "constraint.no-mid-conversation-context-rebuild"
+kind = "constraint"
+path = "AGENTS.md:19"
+layer = "core"
+source = "AGENTS.md:15-18"
+desc = "会话中途不得修改过去的上下文或重建 system prompt"
+
+[[nodes]]
+id = "constraint.no-mid-conversation-toolset-change"
+kind = "constraint"
+path = "AGENTS.md:19"
+layer = "core"
+source = "AGENTS.md:15-18"
+desc = "会话生命周期内不得动态切换 toolset"
+
+[[nodes]]
+id = "constraint.message-role-alternation"
+kind = "constraint"
+path = "AGENTS.md:90"
+layer = "core"
+source = "AGENTS.md:88-91"
+desc = "消息必须保持严格角色交替，不插入 synthetic user message"
+
+[[nodes]]
+id = "constraint.plugins-do-not-edit-core"
+kind = "constraint"
+path = "AGENTS.md:779"
+layer = "capability"
+source = "AGENTS.md:761-814"
+desc = "插件不能为自身需求修改 run_agent.py、cli.py、gateway/run.py 等核心文件"
+
+[[nodes]]
+id = "constraint.profile-scoped-state"
+kind = "constraint"
+path = "AGENTS.md:1171"
+layer = "infra"
+source = "AGENTS.md:1169-1216"
+desc = "持久化状态必须通过 get_hermes_home() 按 profile 隔离，不能硬编码 ~/.hermes"
+
+# ------------------------------------------------------------
+# 节点：架构决策
+# ------------------------------------------------------------
+
+[[nodes]]
+id = "decision.capability-lives-at-edges"
+kind = "decision"
+path = "AGENTS.md:182"
+layer = "capability"
+source = "AGENTS.md:182-211"
+desc = "新增能力优先通过已有代码、CLI+skill、服务门控工具、plugin 或 MCP 提供"
+
+[[nodes]]
+id = "decision.plugins-use-generic-surface"
+kind = "decision"
+path = "AGENTS.md:741"
+layer = "capability"
+source = "AGENTS.md:735-851"
+desc = "插件通过通用注册接口、hook 和 ABC 接入，不在核心中增加插件特判"
+
+[[nodes]]
+id = "decision.dashboard-embeds-tui"
+kind = "decision"
+path = "AGENTS.md:481"
+layer = "application"
+source = "AGENTS.md:479-491"
+desc = "Dashboard 聊天体验复用真实 hermes --tui，不在 React 中重写主聊天界面"
+
+[[nodes]]
+id = "decision.profiles-are-isolated-islands"
+kind = "decision"
+path = "AGENTS.md:152"
+layer = "infra"
+source = "AGENTS.md:138-151"
+desc = "profile 之间保持独立，合法的复制需求通过创建时 clone 完成，而不是运行时继承"
+
+# ------------------------------------------------------------
+# 节点：系统不变量
+# ------------------------------------------------------------
+
+[[nodes]]
+id = "invariant.system-prompt-stable-during-conversation"
+kind = "invariant"
+path = "AGENTS.md:19"
+layer = "core"
+source = "AGENTS.md:15-22"
+desc = "同一会话期间 system prompt 对缓存前缀保持字节稳定"
+
+[[nodes]]
+id = "invariant.message-role-alternation"
+kind = "invariant"
+path = "AGENTS.md:90"
+layer = "core"
+source = "AGENTS.md:88-91"
+desc = "消息序列保持合法的 user、assistant、tool 角色交替关系"
+
+[[nodes]]
+id = "invariant.profile-state-isolation"
+kind = "invariant"
+path = "AGENTS.md:1160"
+layer = "infra"
+source = "AGENTS.md:1160-1216"
+desc = "不同 profile 的配置、持久化状态、记忆和会话互不污染"
+
+[[nodes]]
+id = "invariant.plugin-core-boundary"
+kind = "invariant"
+path = "AGENTS.md:779"
+layer = "capability"
+source = "AGENTS.md:735-851"
+desc = "插件扩展核心提供的通用接口，但不把插件专用逻辑写入核心"
+
+# ------------------------------------------------------------
+# 边：长期层内部逻辑
+# ------------------------------------------------------------
+
+[[edges]]
+from = "principle.prompt-caching-sacred"
+to = "constraint.no-mid-conversation-context-rebuild"
+rel = "IMPLIES"
+
+[[edges]]
+from = "principle.prompt-caching-sacred"
+to = "constraint.no-mid-conversation-toolset-change"
+rel = "IMPLIES"
+
+[[edges]]
+from = "principle.prompt-caching-sacred"
+to = "invariant.system-prompt-stable-during-conversation"
+rel = "PROTECTS"
+
+[[edges]]
+from = "constraint.message-role-alternation"
+to = "invariant.message-role-alternation"
+rel = "PROTECTS"
+
+[[edges]]
+from = "principle.narrow-core"
+to = "decision.capability-lives-at-edges"
+rel = "JUSTIFIES"
+
+[[edges]]
+from = "decision.capability-lives-at-edges"
+to = "constraint.plugins-do-not-edit-core"
+rel = "IMPLIES"
+
+[[edges]]
+from = "decision.plugins-use-generic-surface"
+to = "invariant.plugin-core-boundary"
+rel = "PROTECTS"
+
+[[edges]]
+from = "constraint.plugins-do-not-edit-core"
+to = "invariant.plugin-core-boundary"
+rel = "PROTECTS"
+
+[[edges]]
+from = "principle.profile-isolation"
+to = "decision.profiles-are-isolated-islands"
+rel = "JUSTIFIES"
+
+[[edges]]
+from = "decision.profiles-are-isolated-islands"
+to = "constraint.profile-scoped-state"
+rel = "IMPLIES"
+
+[[edges]]
+from = "constraint.profile-scoped-state"
+to = "invariant.profile-state-isolation"
+rel = "PROTECTS"
+
+# ------------------------------------------------------------
+# 边：长期规范到源码图节点
+# ------------------------------------------------------------
+
+[[edges]]
+from = "constraint.no-mid-conversation-context-rebuild"
+to = "file.run_agent"
+rel = "GOVERNS"
+
+[[edges]]
+from = "constraint.no-mid-conversation-toolset-change"
+to = "file.toolsets"
+rel = "GOVERNS"
+
+[[edges]]
+from = "constraint.no-mid-conversation-toolset-change"
+to = "file.model_tools"
+rel = "GOVERNS"
+
+[[edges]]
+from = "constraint.message-role-alternation"
+to = "file.run_agent"
+rel = "GOVERNS"
+
+[[edges]]
+from = "invariant.system-prompt-stable-during-conversation"
+to = "feature.skill-startup"
+rel = "GOVERNS"
+note = "技能启动注入必须保持会话缓存约束；与现有 feature.skill-startup 图交叉引用"
+
+[[edges]]
+from = "principle.narrow-core"
+to = "mod.agent"
+rel = "GOVERNS"
+
+[[edges]]
+from = "principle.narrow-core"
+to = "mod.tools"
+rel = "GOVERNS"
+
+[[edges]]
+from = "decision.capability-lives-at-edges"
+to = "mod.plugins"
+rel = "GOVERNS"
+
+[[edges]]
+from = "decision.plugins-use-generic-surface"
+to = "mod.plugins"
+rel = "GOVERNS"
+
+[[edges]]
+from = "decision.dashboard-embeds-tui"
+to = "mod.tui_gateway"
+rel = "GOVERNS"
+
+[[edges]]
+from = "decision.dashboard-embeds-tui"
+to = "mod.ui_tui"
+rel = "GOVERNS"
+
+[[edges]]
+from = "constraint.plugins-do-not-edit-core"
+to = "mod.plugins"
+rel = "GOVERNS"
+
+[[edges]]
+from = "constraint.profile-scoped-state"
+to = "file.hermes_constants"
+rel = "GOVERNS"
+
+[[edges]]
+from = "invariant.profile-state-isolation"
+to = "file.hermes_state"
+rel = "GOVERNS"
+
+[[edges]]
+from = "principle.verify-intent-before-fixing"
+to = "mod.agent"
+rel = "GOVERNS"
+note = "读码和修复决策原则，当前先落到核心 Agent 研究范围"

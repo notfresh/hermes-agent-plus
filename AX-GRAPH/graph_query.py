@@ -24,8 +24,14 @@ from pathlib import Path
 BASE = Path(__file__).parent
 ACTIVE_FILE = BASE / ".active-base"
 ARCH_LAYERS = {"core", "interface", "capability", "application", "entry", "infra"}
-VALID_KINDS = {"module", "file", "cluster", "subpackage", "feature", "function", "constants"}
-VALID_RELS = {"CONTAINS", "DEPENDS_ON", "REALIZED_BY", "CALLS"}
+VALID_KINDS = {
+    "module", "file", "cluster", "subpackage", "feature", "function", "constants",
+    "principle", "constraint", "decision", "invariant",
+}
+VALID_RELS = {
+    "CONTAINS", "DEPENDS_ON", "REALIZED_BY", "CALLS",
+    "DERIVED_FROM", "GOVERNS", "PROTECTS", "JUSTIFIES", "IMPLIES", "CONFLICTS_WITH",
+}
 
 
 # ── base 管理（多库体系，类似 select database）──
