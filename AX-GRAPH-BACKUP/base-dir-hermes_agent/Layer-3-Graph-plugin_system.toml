@@ -1,0 +1,381 @@
+# ============================================================
+# Layer 3 Graph — plugin-system 功能链
+# 格式：TOML（机器可解析）
+# 粒度：功能级（feature + function）
+# 说明：插件系统横切 hermes_cli/plugins.py（管理器）+ plugins/（内置插件）
+#       核心链路：四源发现 → 选择性加载 → register(ctx) 注册 → diff 统计
+# 更新：2026-09-01
+# ============================================================
+
+[graph]
+name = "Layer 3 Graph - plugin-system 功能链"
+layer = 3
+granularity = "功能级（feature + function）"
+created = "2026-09-01"
+note = "REALIZED_BY 边为扫描+确认的事实；CALLS at_line 当次 grep 实测；register_fn(ctx) 为动态调用不入 CALLS 边（_load_plugin 内）；延迟加载首次请求平台时才真正 _load_plugin（platform_registry loader）"
+
+# ------------------------------------------------------------
+# 功能节点
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 feature.plugin-system: 插件系统（四源发现 + 两阶加载 + register 注册）
+id = "feature.plugin-system"
+kind = "feature"
+desc = "插件系统：四源发现（bundled/user/project/entrypoint）→ 选择性加载（白名单/延迟）→ import 模块 + 调 register(ctx) 注册工具/钩子/命令；横切 hermes_cli/plugins.py + plugins/"
+
+# ------------------------------------------------------------
+# 类与函数节点（行号 2026-09-01 grep 实测）
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 func.hermes_cli.plugins.PluginContext: 插件注册 facade（ctx）
+id = "func.hermes_cli.plugins.PluginContext"
+kind = "function"
+path = "hermes_cli/plugins.py:339"
+layer = "core"
+desc = "插件注册 facade：register_tool/hook/middleware/cli_command/command/skill + dispatch_tool；插件拿到的唯一入口对象"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins.PluginManager: 插件管理器（发现+加载+注册表）
+id = "func.hermes_cli.plugins.PluginManager"
+kind = "function"
+path = "hermes_cli/plugins.py:1248"
+layer = "core"
+desc = "插件管理器：四源扫描 manifests、选择性加载、LoadedPlugin 注册表、invoke_hook 分发"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins.discover_and_load: 发现+加载入口
+id = "func.hermes_cli.plugins.discover_and_load"
+kind = "function"
+path = "hermes_cli/plugins.py:1279"
+layer = "core"
+desc = "discover_and_load(force)：入口，force 清理旧注册表后调 _discover_and_load_inner"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins._discover_and_load_inner: 四源扫描+选择性加载
+id = "func.hermes_cli.plugins._discover_and_load_inner"
+kind = "function"
+path = "hermes_cli/plugins.py:1317"
+layer = "core"
+desc = "四源扫描（bundled→user→project→entrypoint）收集 manifests，去重后按 kind/source 选择性加载；platform 走延迟注册"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins._scan_directory: 目录扫描找 plugin.yaml
+id = "func.hermes_cli.plugins._scan_directory"
+kind = "function"
+path = "hermes_cli/plugins.py:1482"
+layer = "core"
+desc = "扫描目录（flat 或 category 布局）找 plugin.yaml，逐个 _parse_manifest；skip_names 排除自有发现系统的子目录"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins._parse_manifest: manifest 解析+自动分类
+id = "func.hermes_cli.plugins._parse_manifest"
+kind = "function"
+path = "hermes_cli/plugins.py:1563"
+layer = "core"
+desc = "解析 plugin.yaml → PluginManifest；heuristic 识别 kind：register_memory_provider→exclusive、ProviderProfile→model-provider"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins._scan_entry_points: pip entry-point 插件
+id = "func.hermes_cli.plugins._scan_entry_points"
+kind = "function"
+path = "hermes_cli/plugins.py:1658"
+layer = "core"
+desc = "扫描 hermes_agent.plugins entry-point：pip 安装的第三方插件"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins._register_deferred_platform: 平台插件延迟注册
+id = "func.hermes_cli.plugins._register_deferred_platform"
+kind = "function"
+path = "hermes_cli/plugins.py:1707"
+layer = "core"
+desc = "bundled+platform 插件注册轻量 loader 到 platform_registry，首次请求该平台才真正 _load_plugin（避免重型 SDK eager import）"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins._load_plugin: import 模块 + 调 register(ctx) + diff 统计
+id = "func.hermes_cli.plugins._load_plugin"
+kind = "function"
+path = "hermes_cli/plugins.py:1748"
+layer = "core"
+desc = "核心加载：import __init__.py → getattr(module,'register') → snapshot 注册表 → register_fn(ctx) → diff 统计该插件注册的工具/钩子/中间件/命令"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins._load_directory_module: importlib 加载目录模块
+id = "func.hermes_cli.plugins._load_directory_module"
+kind = "function"
+path = "hermes_cli/plugins.py:1832"
+layer = "core"
+desc = "importlib 加载插件目录，模块注册到 hermes_plugins.<slug> namespace 防冲突"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins._load_entrypoint_module: 加载 entry-point 模块
+id = "func.hermes_cli.plugins._load_entrypoint_module"
+kind = "function"
+path = "hermes_cli/plugins.py:1870"
+layer = "core"
+desc = "加载 pip entry-point 插件的模块"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins.invoke_hook: 钩子分发（20+ 钩子点）
+id = "func.hermes_cli.plugins.invoke_hook"
+kind = "function"
+path = "hermes_cli/plugins.py:1892"
+layer = "core"
+desc = "invoke_hook(name, **kwargs)：遍历注册的回调，每个 try/except 包裹——插件异常不破坏核心；被 agent 循环/gateway 在 20+ 生命周期点调用"
+
+[[nodes]]  # 节点 const.hermes_cli.plugins.VALID_HOOKS: 合法钩子名白名单
+id = "const.hermes_cli.plugins.VALID_HOOKS"
+kind = "constants"
+path = "hermes_cli/plugins.py:135"
+layer = "core"
+desc = "20+ 合法钩子点集合：pre/post_tool_call、pre/post_llm_call、on_session_start/end、transform_* 等"
+
+# ------------------------------------------------------------
+# 归属边（file → 类/函数/常量）
+# ------------------------------------------------------------
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins.PluginContext"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins.PluginManager"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins.discover_and_load"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins._discover_and_load_inner"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins._scan_directory"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins._parse_manifest"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins._scan_entry_points"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins._register_deferred_platform"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins._load_plugin"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins._load_directory_module"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins._load_entrypoint_module"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins.invoke_hook"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "const.hermes_cli.plugins.VALID_HOOKS"
+rel = "CONTAINS"
+
+# ------------------------------------------------------------
+# 功能归属（feature → 实现函数）
+# ------------------------------------------------------------
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins.PluginManager"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins.PluginContext"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins.discover_and_load"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins._discover_and_load_inner"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins._scan_directory"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins._scan_entry_points"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins._register_deferred_platform"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins._load_plugin"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins._load_directory_module"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins.invoke_hook"
+rel = "REALIZED_BY"
+
+# ------------------------------------------------------------
+# 调用链（CALLS，at_line 当次 grep 实测）
+# ------------------------------------------------------------
+
+[[edges]]  # discover_and_load → 内部实现
+from = "func.hermes_cli.plugins.discover_and_load"
+to = "func.hermes_cli.plugins._discover_and_load_inner"
+rel = "CALLS"
+at_line = 1312
+
+[[edges]]  # 四源扫描主调点（bundled 第一个）
+from = "func.hermes_cli.plugins._discover_and_load_inner"
+to = "func.hermes_cli.plugins._scan_directory"
+rel = "CALLS"
+at_line = 1336
+note = "同函数内共 4 处调用（1336/1343/1352/1360：bundled/platforms/user/project）"
+
+[[edges]]  # pip entry-point 扫描
+from = "func.hermes_cli.plugins._discover_and_load_inner"
+to = "func.hermes_cli.plugins._scan_entry_points"
+rel = "CALLS"
+at_line = 1369
+
+[[edges]]  # 平台插件延迟注册
+from = "func.hermes_cli.plugins._discover_and_load_inner"
+to = "func.hermes_cli.plugins._register_deferred_platform"
+rel = "CALLS"
+at_line = 1447
+
+[[edges]]  # manifest 解析
+from = "func.hermes_cli.plugins._scan_directory"
+to = "func.hermes_cli.plugins._parse_manifest"
+rel = "CALLS"
+at_line = 1536
+
+[[edges]]  # 目录插件加载
+from = "func.hermes_cli.plugins._load_plugin"
+to = "func.hermes_cli.plugins._load_directory_module"
+rel = "CALLS"
+at_line = 1765
+
+[[edges]]  # entry-point 插件加载
+from = "func.hermes_cli.plugins._load_plugin"
+to = "func.hermes_cli.plugins._load_entrypoint_module"
+rel = "CALLS"
+at_line = 1767
+
+# ------------------------------------------------------------
+# 补充节点（2026-09-01 反哺自 001study/teach-4-plugin-system.md）
+# 数据结构 + CLI 插线入口 + 示例插件
+# ------------------------------------------------------------
+
+[[nodes]]  # 节点 func.hermes_cli.plugins.PluginManifest: manifest 数据类（11 字段）
+id = "func.hermes_cli.plugins.PluginManifest"
+kind = "function"
+path = "hermes_cli/plugins.py:281"
+layer = "core"
+desc = "PluginManifest 数据类：name/version/requires_env/provides_tools/provides_hooks/source/path/kind/key 等 11 字段；_parse_manifest 的产出"
+
+[[nodes]]  # 节点 func.hermes_cli.plugins.LoadedPlugin: 加载后运行时状态（8 字段）
+id = "func.hermes_cli.plugins.LoadedPlugin"
+kind = "function"
+path = "hermes_cli/plugins.py:318"
+layer = "core"
+desc = "LoadedPlugin 运行时状态：manifest/module/tools_registered/hooks_registered/middleware_registered/commands_registered/enabled/error/deferred；_load_plugin 的产出，进 _plugins 注册表"
+
+[[nodes]]  # 节点 file.hermes_cli.subcommands.plugins: CLI 插线入口（parser 构建）
+id = "file.hermes_cli.subcommands.plugins"
+kind = "file"
+path = "hermes_cli/subcommands/plugins.py"
+layer = "entry"
+desc = "hermes plugins 子命令插线：build_plugins_parser 建 parser 分发到 plugins_cmd"
+
+[[nodes]]  # 节点 func.hermes_cli.subcommands.plugins.build_plugins_parser: 插件子命令 parser
+id = "func.hermes_cli.subcommands.plugins.build_plugins_parser"
+kind = "function"
+path = "hermes_cli/subcommands/plugins.py:12"
+layer = "entry"
+desc = "建 hermes plugins 子命令 parser（install/search/update/remove/list/enable/disable/capabilities/doctor/pack/show）"
+
+[[nodes]]  # 节点 file.plugins.disk_cleanup: 内置示例插件（bundled standalone）
+id = "file.plugins.disk_cleanup"
+kind = "file"
+path = "plugins/disk-cleanup/"
+layer = "capability"
+desc = "内置示例插件（bundled/standalone）：临时文件追踪清理；plugin.yaml + __init__.py register(ctx) 结构范本"
+
+[[nodes]]  # 节点 func.plugins.disk_cleanup.register: 示例插件 register 入口
+id = "func.plugins.disk_cleanup.register"
+kind = "function"
+path = "plugins/disk-cleanup/__init__.py:309"
+layer = "capability"
+desc = "示例 register(ctx)：注册 post_tool_call / on_session_end 钩子 + disk-cleanup slash 命令"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins.PluginManifest"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.plugins"
+to = "func.hermes_cli.plugins.LoadedPlugin"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.hermes_cli.subcommands.plugins"
+to = "func.hermes_cli.subcommands.plugins.build_plugins_parser"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.plugins.disk_cleanup"
+to = "func.plugins.disk_cleanup.register"
+rel = "CONTAINS"
+
+[[edges]]
+from = "mod.hermes_cli"
+to = "file.hermes_cli.subcommands.plugins"
+rel = "CONTAINS"
+
+[[edges]]
+from = "mod.plugins"
+to = "file.plugins.disk_cleanup"
+rel = "CONTAINS"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins.PluginManifest"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.plugins.LoadedPlugin"
+rel = "REALIZED_BY"
+
+[[edges]]
+from = "feature.plugin-system"
+to = "func.hermes_cli.subcommands.plugins.build_plugins_parser"
+rel = "REALIZED_BY"

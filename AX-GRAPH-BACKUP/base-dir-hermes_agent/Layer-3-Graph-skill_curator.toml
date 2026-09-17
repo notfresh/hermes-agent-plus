@@ -1,0 +1,516 @@
+# ============================================================
+# Layer 3 Graph — skill-curator 功能链（自动创建 & 生命周期管理）
+# 格式：TOML（机器可解析）
+# 粒度：功能级（feature + function）
+# 说明：自动创建 = curator 触发 fork → LLM 评审 → skill_manage(action=create)
+#       生命周期 = 自动 stale/archive/pin/consolidate
+# 更新：2026-08-30
+# ============================================================
+
+[graph]
+name = "Layer 3 Graph - skill-curator 功能链"
+layer = 3
+granularity = "功能级（feature + function）"
+created = "2026-08-30"
+note = "REALIZED_BY/CALLS 边均为扫描+确认的事实；LLM prompt 内容由 curator.py 内嵌字符串提供"
+
+# ============================================================
+# 功能节点
+# ============================================================
+
+[[nodes]]  # 节点 feature.skill-curator: 技能自动创建 & 生命周期管理
+id = "feature.skill-curator"
+kind = "feature"
+desc = "技能自动创建与生命周期：curator 定时触发 → fork AIAgent → LLM 评审 → skill_manage(action=create/patch/delete) + 自动 stale/archive/consolidate"
+note = "只管理 created_by='agent' 的技能；用户手动创建的技能不受 curator 影响"
+
+# ============================================================
+# 文件节点
+# ============================================================
+
+[[nodes]]  # 节点 file.tools.skill_manager_tool: 技能管理器（agent 自主创建/编辑/删除技能的唯一入口）
+id = "file.tools.skill_manager_tool"
+kind = "file"
+path = "tools/skill_manager_tool.py"
+layer = "core"
+desc = "技能管理器：skill_manage(action=create/edit/patch/delete/write_file/remove_file)；是 agent 自主创建/编辑/删除技能的唯一工具"
+
+[[nodes]]  # 节点 file.tools.skill_provenance: 写来源 ContextVar（区分 foreground vs background_review）
+id = "file.tools.skill_provenance"
+kind = "file"
+path = "tools/skill_provenance.py"
+layer = "core"
+desc = "技能写来源：ContextVar 区分 foreground（用户触发）vs background_review（curator 触发）；只有后者才标记 created_by='agent'"
+
+[[nodes]]  # 节点 file.tools.skill_usage: 技能遥测（usage.json，created_by 标记）
+id = "file.tools.skill_usage"
+kind = "file"
+path = "tools/skill_usage.py"
+layer = "core"
+desc = "技能遥测：usage.json 侧car，记录 use_count/patch_count/created_by；mark_agent_created 将技能纳入 curator 管理范围"
+
+[[nodes]]  # 节点 file.agent.curator: 策展人（自动转态 + LLM 评审 + fork 调度）
+id = "file.agent.curator"
+kind = "file"
+path = "agent/curator.py"
+layer = "core"
+desc = "策展人：maybe_run_curator（触发判断）→ apply_automatic_transitions（确定性 stale/archive）→ run_curator_review（主入口）→ _run_llm_review（fork AIAgent 执行 LLM 评审）"
+
+[[nodes]]  # 节点 file.cli: CLI 入口（启动时触发 curator）
+id = "file.cli"
+kind = "file"
+path = "cli.py"
+layer = "core"
+desc = "CLI 入口：HermesCLI 启动时调用 maybe_run_curator(idle_for_seconds=inf)，触发 curator 首次评审"
+
+[[nodes]]  # 节点 file.gateway.run: Gateway 运行时（定期触发 curator）
+id = "file.gateway.run"
+kind = "file"
+path = "gateway/run.py"
+layer = "core"
+desc = "Gateway 运行时：agent idle 时定期调用 maybe_run_curator(idle_for_seconds=idle_time)，触发 curator 评审"
+
+# ============================================================
+# 函数节点
+# ============================================================
+
+# --- tools/skill_manager_tool.py ---
+
+[[nodes]]  # 节点 func.tools.skill_manager_tool.skill_manage: 技能管理主分发器
+id = "func.tools.skill_manager_tool.skill_manage"
+kind = "function"
+path = "tools/skill_manager_tool.py:1340"
+desc = "技能管理主分发器：create/edit/patch/delete/write_file/remove_file；create 时可选 category（未传则平铺根目录）"
+
+[[nodes]]  # 节点 func.tools.skill_manager_tool._create_skill: 创建技能（原子操作：mkdir + 原子写 + 安全扫描）
+id = "func.tools.skill_manager_tool._create_skill"
+kind = "function"
+path = "tools/skill_manager_tool.py:813"
+desc = "创建技能：验证 → mkdir → 原子写 SKILL.md → 安全扫描；category 未传则平铺 _skills_dir() 根目录"
+
+[[nodes]]  # 节点 func.tools.skill_manager_tool._resolve_skill_dir: 路径解析（category 有/无决定平铺或子目录）
+id = "func.tools.skill_manager_tool._resolve_skill_dir"
+kind = "function"
+path = "tools/skill_manager_tool.py:598"
+desc = "路径解析：category=None → _skills_dir()/name（平铺）；category='mlops' → _skills_dir()/mlops/name（子目录）"
+
+[[nodes]]  # 节点 func.tools.skill_manager_tool._validate_category: 验证 category 名称合法性
+id = "func.tools.skill_manager_tool._validate_category"
+kind = "function"
+path = "tools/skill_manager_tool.py:516"
+desc = "验证 category：禁止 / \\ ，校验 VALID_NAME_RE，长度限制；None/空=无分类（平铺）"
+
+[[nodes]]  # 节点 func.tools.skill_manager_tool._background_review_write_guard: 背景评审写保护（禁止修改 bundled/hub/installed/非 agent-created 技能）
+id = "func.tools.skill_manager_tool._background_review_write_guard"
+kind = "function"
+path = "tools/skill_manager_tool.py:297"
+desc = "背景评审写保护：background_review fork 只能写 created_by='agent' 的技能；bundled/hub-installed/手动创建技能全部拒绝"
+
+[[nodes]]  # 节点 func.tools.skill_manager_tool._background_review_read_before_write_guard: 读-写顺序保护（要求评审 fork 先 skill_view 再 patch）
+id = "func.tools.skill_manager_tool._background_review_read_before_write_guard"
+kind = "function"
+path = "tools/skill_manager_tool.py:399"
+desc = "读-写顺序保护：background_review fork 必须先 skill_view 加载内容才能 patch/write_file"
+
+# --- tools/skill_provenance.py ---
+
+[[nodes]]  # 节点 func.tools.skill_provenance.is_background_review: 判断当前是否在 background_review fork 中执行
+id = "func.tools.skill_provenance.is_background_review"
+kind = "function"
+path = "tools/skill_provenance.py:75"
+desc = "判断写来源：ContextVar 'skill_write_origin' == 'background_review' 时返回 True；控制 mark_agent_created 是否触发"
+
+[[nodes]]  # 节点 func.tools.skill_provenance.set_current_write_origin: 绑定写来源 ContextVar
+id = "func.tools.skill_provenance.set_current_write_origin"
+kind = "function"
+path = "tools/skill_provenance.py:48"
+desc = "绑定写来源：fork 前调用 set('background_review')；_spawn_review_fork 在 AIAgent._memory_write_origin='background_review' 后会触发"
+
+# --- tools/skill_usage.py ---
+
+[[nodes]]  # 节点 func.tools.skill_usage.mark_agent_created: 标记技能为 agent 创建（纳入 curator 管理）
+id = "func.tools.skill_usage.mark_agent_created"
+kind = "function"
+path = "tools/skill_usage.py:646"
+desc = "标记技能：usage.json 写入 created_by='agent'；只有此标记的技能才被 curator 管理；is_background_review=True 时才调用"
+
+[[nodes]]  # 节点 func.tools.skill_usage.is_agent_created: 判断技能是否为 agent 创建
+id = "func.tools.skill_usage.is_agent_created"
+kind = "function"
+path = "tools/skill_usage.py:419"
+desc = "判断 agent 创建：created_by='agent' or agent_created=True；排除 bundled/hub-installed；curator 筛选候选集用"
+
+[[nodes]]  # 节点 func.tools.skill_usage.agent_created_report: 列出所有 agent 创建的技能及其活跃度
+id = "func.tools.skill_usage.agent_created_report"
+kind = "function"
+path = "tools/skill_usage.py:870"
+desc = "列出候选集：只返回 created_by='agent' 的技能 + 活跃度指标；供 curator 自动转态 + LLM 评审使用"
+
+[[nodes]]  # 节点 func.tools.skill_usage.archive_skill: 归档技能（不删除，移到 .archive/）
+id = "func.tools.skill_usage.archive_skill"
+kind = "function"
+path = "tools/skill_usage.py:696"
+desc = "归档技能：重命名目录加时间戳，移动到 .archive/；永不自动删除；可恢复"
+
+# --- agent/curator.py ---
+
+[[nodes]]  # 节点 func.agent.curator.maybe_run_curator: curator 触发判断入口（idle 触发 + 定时间隔）
+id = "func.agent.curator.maybe_run_curator"
+kind = "function"
+path = "agent/curator.py:1998"
+desc = "触发判断：idle_for_seconds > min_idle_hours AND interval 到期 → run_curator_review()；否则静默跳过"
+
+[[nodes]]  # 节点 func.agent.curator.apply_automatic_transitions: 确定性自动转态（stale → archived，无 LLM）
+id = "func.agent.curator.apply_automatic_transitions"
+kind = "function"
+path = "agent/curator.py:305"
+desc = "自动转态：纯确定性逻辑，use_count=0 超过 stale_after_days → stale；超过 archive_after_days → archived；LLM 零消耗"
+
+[[nodes]]  # 节点 func.agent.curator.run_curator_review: curator 主入口（自动转态 → 可选 LLM 评审 fork）
+id = "func.agent.curator.run_curator_review"
+kind = "function"
+path = "agent/curator.py:1494"
+desc = "主入口：apply_automatic_transitions() → consolidate=True 时 _run_llm_review() fork AIAgent 执行 LLM 评审"
+
+[[nodes]]  # 节点 func.agent.curator._run_llm_review: LLM 评审 fork（spawn AIAgent，设置 _memory_write_origin='background_review'）
+id = "func.agent.curator._run_llm_review"
+kind = "function"
+path = "agent/curator.py:1825"
+desc = "LLM 评审：fork AIAgent → 注入 CURATOR_REVIEW_PROMPT → LLM 调用 skill_manage/create/patch/delete → 产出 tool_calls 供审计"
+
+[[nodes]]  # 节点 const.agent.curator.CURATOR_REVIEW_PROMPT: LLM 评审 prompt（内嵌在 curator.py 中的字符串常量）
+id = "const.agent.curator.CURATOR_REVIEW_PROMPT"
+kind = "constants"
+path = "agent/curator.py:417"
+desc = "LLM 评审 prompt 字符串常量，指导 LLM 决定哪些技能合并/归档/创建伞形技能；LLM 决定调用 skill_manage(action=create/patch/delete)"
+
+[[nodes]]  # 节点 func.agent.curator._parse_structured_summary: 解析 LLM 结构化评审结果（YAML block）
+id = "func.agent.curator._parse_structured_summary"
+kind = "function"
+path = "agent/curator.py:737"
+desc = "解析 LLM 评审结果：解析 YAML block 提取 consolidation/pruning 指令；判断 absorbed_into 是否非空区分合并 vs 裁剪"
+
+# ============================================================
+# 边：CONTAINS（文件归属模块）
+# ============================================================
+
+[[edges]]
+from = "mod.tools"
+to = "file.tools.skill_manager_tool"
+rel = "CONTAINS"
+
+[[edges]]
+from = "mod.tools"
+to = "file.tools.skill_provenance"
+rel = "CONTAINS"
+
+[[edges]]
+from = "mod.tools"
+to = "file.tools.skill_usage"
+rel = "CONTAINS"
+
+[[edges]]
+from = "mod.agent"
+to = "file.agent.curator"
+rel = "CONTAINS"
+
+# ============================================================
+# 边：CONTAINS（函数归属文件）
+# ============================================================
+
+[[edges]]
+from = "file.tools.skill_manager_tool"
+to = "func.tools.skill_manager_tool.skill_manage"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skill_manager_tool"
+to = "func.tools.skill_manager_tool._create_skill"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skill_manager_tool"
+to = "func.tools.skill_manager_tool._resolve_skill_dir"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skill_manager_tool"
+to = "func.tools.skill_manager_tool._validate_category"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skill_manager_tool"
+to = "func.tools.skill_manager_tool._background_review_write_guard"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skill_manager_tool"
+to = "func.tools.skill_manager_tool._background_review_read_before_write_guard"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skill_provenance"
+to = "func.tools.skill_provenance.is_background_review"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skill_provenance"
+to = "func.tools.skill_provenance.set_current_write_origin"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skill_usage"
+to = "func.tools.skill_usage.mark_agent_created"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skill_usage"
+to = "func.tools.skill_usage.is_agent_created"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skill_usage"
+to = "func.tools.skill_usage.agent_created_report"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.tools.skill_usage"
+to = "func.tools.skill_usage.archive_skill"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.curator"
+to = "func.agent.curator.maybe_run_curator"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.curator"
+to = "func.agent.curator.apply_automatic_transitions"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.curator"
+to = "func.agent.curator.run_curator_review"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.curator"
+to = "func.agent.curator._run_llm_review"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.curator"
+to = "const.agent.curator.CURATOR_REVIEW_PROMPT"
+rel = "CONTAINS"
+
+[[edges]]
+from = "file.agent.curator"
+to = "func.agent.curator._parse_structured_summary"
+rel = "CONTAINS"
+
+# ============================================================
+# 边：REALIZED_BY（feature → 实现函数）
+# ============================================================
+
+[[edges]]  # curator 触发 → 自动转态
+from = "feature.skill-curator"
+to = "func.agent.curator.maybe_run_curator"
+rel = "REALIZED_BY"
+
+[[edges]]  # 自动转态（确定性，无 LLM）
+from = "feature.skill-curator"
+to = "func.agent.curator.apply_automatic_transitions"
+rel = "REALIZED_BY"
+
+[[edges]]  # 主入口（协调自动转态 + fork）
+from = "feature.skill-curator"
+to = "func.agent.curator.run_curator_review"
+rel = "REALIZED_BY"
+
+[[edges]]  # LLM 评审 fork
+from = "feature.skill-curator"
+to = "func.agent.curator._run_llm_review"
+rel = "REALIZED_BY"
+
+[[edges]]  # 技能管理主入口（curator fork 调用它创建技能）
+from = "feature.skill-curator"
+to = "func.tools.skill_manager_tool.skill_manage"
+rel = "REALIZED_BY"
+
+[[edges]]  # 创建技能
+from = "feature.skill-curator"
+to = "func.tools.skill_manager_tool._create_skill"
+rel = "REALIZED_BY"
+
+[[edges]]  # 路径解析（平铺 vs category 子目录）
+from = "feature.skill-curator"
+to = "func.tools.skill_manager_tool._resolve_skill_dir"
+rel = "REALIZED_BY"
+
+[[edges]]  # 背景评审写保护
+from = "feature.skill-curator"
+to = "func.tools.skill_manager_tool._background_review_write_guard"
+rel = "REALIZED_BY"
+
+[[edges]]  # 背景评审读-写顺序保护
+from = "feature.skill-curator"
+to = "func.tools.skill_manager_tool._background_review_read_before_write_guard"
+rel = "REALIZED_BY"
+
+[[edges]]  # 标记为 agent 创建（纳入 curator 管理范围）
+from = "feature.skill-curator"
+to = "func.tools.skill_usage.mark_agent_created"
+rel = "REALIZED_BY"
+
+[[edges]]  # 判断是否为 agent 创建（curator 筛选候选集）
+from = "feature.skill-curator"
+to = "func.tools.skill_usage.is_agent_created"
+rel = "REALIZED_BY"
+
+[[edges]]  # 候选集查询（供自动转态 + LLM 评审）
+from = "feature.skill-curator"
+to = "func.tools.skill_usage.agent_created_report"
+rel = "REALIZED_BY"
+
+[[edges]]  # 归档（不删除，只移动）
+from = "feature.skill-curator"
+to = "func.tools.skill_usage.archive_skill"
+rel = "REALIZED_BY"
+
+[[edges]]  # 写来源判断（控制是否标记 agent_created）
+from = "feature.skill-curator"
+to = "func.tools.skill_provenance.is_background_review"
+rel = "REALIZED_BY"
+
+[[edges]]  # 解析 LLM 评审结果
+from = "feature.skill-curator"
+to = "func.agent.curator._parse_structured_summary"
+rel = "REALIZED_BY"
+
+# ============================================================
+# 边：CALLS（函数级调用，实测）
+# ============================================================
+
+[[edges]]  # curator 触发 → 主入口
+at_line = 2013
+from = "func.agent.curator.maybe_run_curator"
+to = "func.agent.curator.run_curator_review"
+rel = "CALLS"
+
+[[edges]]  # 主入口 → 自动转态
+at_line = 1543
+from = "func.agent.curator.run_curator_review"
+to = "func.agent.curator.apply_automatic_transitions"
+rel = "CALLS"
+
+[[edges]]  # 主入口 → LLM 评审 fork（consolidate=True 时）
+at_line = 1580
+from = "func.agent.curator.run_curator_review"
+to = "func.agent.curator._run_llm_review"
+rel = "CALLS"
+
+[[edges]]  # 主入口 → 候选集查询（计数用）
+at_line = 1534
+from = "func.agent.curator.run_curator_review"
+to = "func.tools.skill_usage.agent_created_report"
+rel = "CALLS"
+
+[[edges]]  # 主入口 → 解析 LLM 评审结果
+at_line = 1608
+from = "func.agent.curator.run_curator_review"
+to = "func.agent.curator._parse_structured_summary"
+rel = "CALLS"
+
+[[edges]]  # LLM fork → skill_manage（LLM 评审过程中调用；动态，非静态代码调用）
+from = "func.agent.curator._run_llm_review"
+to = "func.tools.skill_manager_tool.skill_manage"
+rel = "CALLS"
+note = "LLM 根据 _consolidation_prompt 决定调用 skill_manage(action=create/patch/delete)；调用点为 LLM 输出，非静态代码行"
+
+[[edges]]  # skill_manage → _create_skill（action=create 时）
+at_line = 1377
+from = "func.tools.skill_manager_tool.skill_manage"
+to = "func.tools.skill_manager_tool._create_skill"
+rel = "CALLS"
+
+[[edges]]  # _create_skill → _resolve_skill_dir（确定路径）
+at_line = 842
+from = "func.tools.skill_manager_tool._create_skill"
+to = "func.tools.skill_manager_tool._resolve_skill_dir"
+rel = "CALLS"
+
+[[edges]]  # _create_skill → _validate_category（验证 category 参数）
+at_line = 820
+from = "func.tools.skill_manager_tool._create_skill"
+to = "func.tools.skill_manager_tool._validate_category"
+rel = "CALLS"
+
+[[edges]]  # skill_manage → _background_review_write_guard（写前保护）
+at_line = 1357
+from = "func.tools.skill_manager_tool.skill_manage"
+to = "func.tools.skill_manager_tool._background_review_write_guard"
+rel = "CALLS"
+
+[[edges]]  # skill_manage → _background_review_read_before_write_guard（读-写顺序保护）
+at_line = 976
+from = "func.tools.skill_manager_tool.skill_manage"
+to = "func.tools.skill_manager_tool._background_review_read_before_write_guard"
+rel = "CALLS"
+
+[[edges]]  # _background_review_write_guard → is_background_review（判断是否为 background fork）
+at_line = 408
+from = "func.tools.skill_manager_tool._background_review_write_guard"
+to = "func.tools.skill_provenance.is_background_review"
+rel = "CALLS"
+
+[[edges]]  # skill_manage → mark_agent_created（创建成功后标记；仅 background_review fork 触发）
+at_line = 1425
+from = "func.tools.skill_manager_tool.skill_manage"
+to = "func.tools.skill_usage.mark_agent_created"
+rel = "CALLS"
+
+[[edges]]  # apply_automatic_transitions → is_agent_created（筛选候选集）
+at_line = 280
+from = "func.agent.curator.apply_automatic_transitions"
+to = "func.tools.skill_usage.is_agent_created"
+rel = "CALLS"
+
+[[edges]]  # apply_automatic_transitions → archive_skill（自动归档）
+at_line = 380
+from = "func.agent.curator.apply_automatic_transitions"
+to = "func.tools.skill_usage.archive_skill"
+rel = "CALLS"
+
+[[edges]]  # apply_automatic_transitions → agent_created_report（遍历候选集）
+at_line = 268
+from = "func.agent.curator.apply_automatic_transitions"
+to = "func.tools.skill_usage.agent_created_report"
+rel = "CALLS"
+
+[[edges]]  # _parse_llm_review_result → is_agent_created（判断 absorbed_into 是 consolidation 还是 pruning）
+at_line = 880
+from = "func.agent.curator._parse_structured_summary"
+to = "func.tools.skill_usage.is_agent_created"
+rel = "CALLS"
+
+[[edges]]  # _parse_llm_review_result → archive_skill（consolidation 归档被合并的技能）
+at_line = 980
+from = "func.agent.curator._parse_structured_summary"
+to = "func.tools.skill_usage.archive_skill"
+rel = "CALLS"
+
+# ============================================================
+# 补充：curator 被 run_agent.py 调用（idle 时触发）
+# ============================================================
+
+[[edges]]  # CLI 启动时触发 curator
+from = "file.cli"
+to = "func.agent.curator.maybe_run_curator"
+rel = "CALLS"
+at_line = 12883
+
+[[edges]]  # Gateway 运行时定期触发 curator
+from = "file.gateway.run"
+to = "func.agent.curator.maybe_run_curator"
+rel = "CALLS"
+at_line = 22227

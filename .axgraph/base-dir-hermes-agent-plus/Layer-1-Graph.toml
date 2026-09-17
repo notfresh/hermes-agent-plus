@@ -2,7 +2,7 @@
 # Layer 1 Graph — Hermes Agent 源码级分布图
 # 格式：TOML（机器可解析）
 # 节点 = 源码实体（模块/文件）；边 = 关系（CONTAINS 内聚 / DEPENDS_ON 耦合）
-# 关系均为实测：import 静态分析（2026-08-28），weight = import 次数
+# 关系均为实测：import 静态分析（2026-09-16），weight = import 次数
 # ============================================================
 
 [graph]
@@ -14,6 +14,7 @@ schema = "nodes: 实体; edges: CONTAINS(内聚) / DEPENDS_ON(耦合, weight=imp
 note = "核心发现：hermes_cli 被依赖970次为全库最大，是核心底座而非CLI薄壳；agent/tools/hermes_cli 三巨头强耦合"
 note2 = "覆盖范围修正(2026-08-28)：补入前端应用层 apps/(Electron桌面)、ui-tui/(TUI前端)、web/(Web前端)——多语言源码，非Python。它们与后端经 IPC/API 协议连接(非 import)，连接关系待第二层验证，暂不建 DEPENDS_ON 边"
 note3 = "暂不入图：scripts/(CI运维脚本)、optional-skills/(技能包内容)、optional-mcps/(yaml配置)、docker/nix/packaging/(构建配置)、docs/website/(文档)"
+updated = "2026-09-16"
 
 # ------------------------------------------------------------
 # 节点：模块（12）
@@ -25,8 +26,8 @@ id = 'mod.hermes_cli'
 kind = 'module'
 path = 'hermes_cli/'
 layer = 'core'
-files = 206
-lines = 171836
+files = 454
+lines = 196361
 expanded = false
 desc = '全库最大被依赖方(入度970)：核心底座，含配置/会话等共享逻辑，名不副实的CLI壳'
 
@@ -35,8 +36,8 @@ id = 'mod.agent'
 kind = 'module'
 path = 'agent/'
 layer = 'core'
-files = 156
-lines = 102275
+files = 258
+lines = 106282
 expanded = true
 desc = 'agent 核心：循环、上下文、会话；平铺结构，隐式簇见 cluster.agent.*'
 
@@ -45,8 +46,8 @@ id = 'mod.tools'
 kind = 'module'
 path = 'tools/'
 layer = 'core'
-files = 114
-lines = 97549
+files = 281
+lines = 96030
 expanded = false
 desc = '内置工具集（终端/文件/网络等），被核心簇大量消费'
 
@@ -55,8 +56,8 @@ id = 'mod.gateway'
 kind = 'module'
 path = 'gateway/'
 layer = 'interface'
-files = 77
-lines = 84499
+files = 145
+lines = 80609
 expanded = false
 desc = '消息网关：多平台收发与路由'
 
@@ -65,8 +66,8 @@ id = 'mod.plugins'
 kind = 'module'
 path = 'plugins/'
 layer = 'capability'
-files = 187
-lines = 110192
+files = 238
+lines = 85497
 expanded = false
 desc = '内置插件（hook 扩展），重度消费核心+网关'
 
@@ -75,8 +76,8 @@ id = 'mod.cron'
 kind = 'module'
 path = 'cron/'
 layer = 'capability'
-files = 11
-lines = 8519
+files = 19
+lines = 14174
 expanded = true
 desc = '定时任务调度系统'
 
@@ -85,8 +86,8 @@ id = 'mod.tui_gateway'
 kind = 'module'
 path = 'tui_gateway/'
 layer = 'interface'
-files = 14
-lines = 19669
+files = 58
+lines = 25113
 expanded = false
 desc = 'TUI 网关'
 
@@ -95,8 +96,8 @@ id = 'mod.acp_adapter'
 kind = 'module'
 path = 'acp_adapter/'
 layer = 'interface'
-files = 11
-lines = 5373
+files = 14
+lines = 4111
 expanded = false
 desc = 'ACP 协议适配（叶子消费者）'
 
@@ -106,7 +107,7 @@ kind = 'module'
 path = 'providers/'
 layer = 'capability'
 files = 2
-lines = 423
+lines = 768
 expanded = false
 desc = '模型提供商适配（壳），被 agent/plugins 广泛依赖'
 
@@ -116,7 +117,7 @@ kind = 'module'
 path = 'apps/'
 layer = 'application'
 lang = 'typescript'
-files = 1014
+files = 2373
 lines = 0
 expanded = false
 desc = 'Electron 桌面应用（React + TS + Rust 混编，全库最大前端）'
@@ -127,7 +128,7 @@ kind = 'module'
 path = 'ui-tui/'
 layer = 'application'
 lang = 'typescript'
-files = 382
+files = 477
 lines = 0
 expanded = false
 desc = 'TUI 前端（对应 tui_gateway 的界面层）'
@@ -138,7 +139,7 @@ kind = 'module'
 path = 'web/'
 layer = 'application'
 lang = 'typescript'
-files = 133
+files = 191
 lines = 0
 expanded = false
 desc = 'Web 前端'
@@ -148,6 +149,7 @@ id = 'file.cli'
 kind = 'file'
 path = 'cli.py'
 layer = 'entry'
+lines = 4659
 desc = 'CLI 进程入口'
 
 [[nodes]]  # 节点 file.run_agent: agent 运行入口，驱动核心循环
@@ -155,6 +157,7 @@ id = 'file.run_agent'
 kind = 'file'
 path = 'run_agent.py'
 layer = 'entry'
+lines = 1555
 desc = 'agent 运行入口，驱动核心循环'
 
 [[nodes]]  # 节点 file.batch_runner: 批处理运行器
@@ -162,6 +165,7 @@ id = 'file.batch_runner'
 kind = 'file'
 path = 'batch_runner.py'
 layer = 'entry'
+lines = 998
 desc = '批处理运行器'
 
 [[nodes]]  # 节点 file.mcp_serve: MCP 服务入口
@@ -169,6 +173,7 @@ id = 'file.mcp_serve'
 kind = 'file'
 path = 'mcp_serve.py'
 layer = 'entry'
+lines = 728
 desc = 'MCP 服务入口'
 
 [[nodes]]  # 节点 file.mini_swe_runner: mini SWE 运行器
@@ -176,6 +181,7 @@ id = 'file.mini_swe_runner'
 kind = 'file'
 path = 'mini_swe_runner.py'
 layer = 'entry'
+lines = 401
 desc = 'mini SWE 运行器'
 
 [[nodes]]  # 节点 file.model_tools: 模型内置工具（随每次 API 调用发送的 core tools）
@@ -183,6 +189,7 @@ id = 'file.model_tools'
 kind = 'file'
 path = 'model_tools.py'
 layer = 'core'
+lines = 906
 desc = '模型内置工具（随每次 API 调用发送的 core tools）'
 
 [[nodes]]  # 节点 file.toolsets: 工具集定义/装配
@@ -190,6 +197,7 @@ id = 'file.toolsets'
 kind = 'file'
 path = 'toolsets.py'
 layer = 'core'
+lines = 479
 desc = '工具集定义/装配'
 
 [[nodes]]  # 节点 file.toolset_distributions: 工具集按平台分布配置
@@ -197,6 +205,7 @@ id = 'file.toolset_distributions'
 kind = 'file'
 path = 'toolset_distributions.py'
 layer = 'core'
+lines = 106
 desc = '工具集按平台分布配置'
 
 [[nodes]]  # 节点 file.trajectory_compressor: 对话轨迹压缩（上下文管理）
@@ -204,6 +213,7 @@ id = 'file.trajectory_compressor'
 kind = 'file'
 path = 'trajectory_compressor.py'
 layer = 'core'
+lines = 868
 desc = '对话轨迹压缩（上下文管理）'
 
 [[nodes]]  # 节点 file.hermes_state: agent 状态
@@ -211,6 +221,7 @@ id = 'file.hermes_state'
 kind = 'file'
 path = 'hermes_state.py'
 layer = 'core'
+lines = 1370
 desc = 'agent 状态'
 
 [[nodes]]  # 节点 file.hermes_constants: 共享常量
@@ -218,6 +229,7 @@ id = 'file.hermes_constants'
 kind = 'file'
 path = 'hermes_constants.py'
 layer = 'infra'
+lines = 1172
 desc = '共享常量'
 
 [[nodes]]  # 节点 file.hermes_logging: 集中日志
@@ -225,6 +237,7 @@ id = 'file.hermes_logging'
 kind = 'file'
 path = 'hermes_logging.py'
 layer = 'infra'
+lines = 644
 desc = '集中日志'
 
 [[nodes]]  # 节点 file.hermes_time: 时间工具
@@ -232,6 +245,7 @@ id = 'file.hermes_time'
 kind = 'file'
 path = 'hermes_time.py'
 layer = 'infra'
+lines = 93
 desc = '时间工具'
 
 [[nodes]]  # 节点 file.hermes_bootstrap: Windows UTF-8 引导
@@ -239,6 +253,7 @@ id = 'file.hermes_bootstrap'
 kind = 'file'
 path = 'hermes_bootstrap.py'
 layer = 'infra'
+lines = 119
 desc = 'Windows UTF-8 引导'
 
 [[nodes]]  # 节点 file.utils: 共享工具函数
@@ -246,6 +261,7 @@ id = 'file.utils'
 kind = 'file'
 path = 'utils.py'
 layer = 'infra'
+lines = 491
 desc = '共享工具函数'
 
 [[nodes]]  # 节点 file.setup: 构建脚本
@@ -253,6 +269,7 @@ id = 'file.setup'
 kind = 'file'
 path = 'setup.py'
 layer = 'infra'
+lines = 99
 desc = '构建脚本'
 
 # --- hermes_cli 模块内部文件（第一批展开：hermes 入口链路）---
@@ -281,56 +298,56 @@ desc = '包出口：暴露 jobs + scheduler'
 id = 'file.cron.jobs'
 kind = 'file'
 path = 'cron/jobs.py'
-lines = 2382
+lines = 3136
 desc = '任务存储与管理'
 
 [[nodes]]  # 节点 file.cron.scheduler: 调度器核心：到期任务执行（本模块最大）
 id = 'file.cron.scheduler'
 kind = 'file'
 path = 'cron/scheduler.py'
-lines = 4153
+lines = 3895
 desc = '调度器核心：到期任务执行（本模块最大）'
 
 [[nodes]]  # 节点 file.cron.scheduler_provider: 调度器提供者接口（trigger 抽象）
 id = 'file.cron.scheduler_provider'
 kind = 'file'
 path = 'cron/scheduler_provider.py'
-lines = 219
+lines = 568
 desc = '调度器提供者接口（trigger 抽象）'
 
 [[nodes]]  # 节点 file.cron.executions: 执行审计账本（profile 本地持久化）
 id = 'file.cron.executions'
 kind = 'file'
 path = 'cron/executions.py'
-lines = 228
+lines = 384
 desc = '执行审计账本（profile 本地持久化）'
 
 [[nodes]]  # 节点 file.cron.lifecycle_guard: 网关生命周期守卫
 id = 'file.cron.lifecycle_guard'
 kind = 'file'
 path = 'cron/lifecycle_guard.py'
-lines = 141
+lines = 1023
 desc = '网关生命周期守卫'
 
 [[nodes]]  # 节点 file.cron.suggestions: 建议任务（一键接受）
 id = 'file.cron.suggestions'
 kind = 'file'
 path = 'cron/suggestions.py'
-lines = 260
+lines = 225
 desc = '建议任务（一键接受）'
 
 [[nodes]]  # 节点 file.cron.suggestion_catalog: 建议任务目录（starter 合集）
 id = 'file.cron.suggestion_catalog'
 kind = 'file'
 path = 'cron/suggestion_catalog.py'
-lines = 154
+lines = 143
 desc = '建议任务目录（starter 合集）'
 
 [[nodes]]  # 节点 file.cron.blueprint_catalog: 自动化蓝图：带类型槽位的参数化蓝图
 id = 'file.cron.blueprint_catalog'
 kind = 'file'
 path = 'cron/blueprint_catalog.py'
-lines = 713
+lines = 770
 desc = '自动化蓝图：带类型槽位的参数化蓝图'
 
 [[nodes]]  # 节点 file.cron.scripts.classify: 独立运维脚本
@@ -418,45 +435,45 @@ note = '模块内部文件（第一批展开：hermes 入口链路）'
 from = 'mod.hermes_cli'
 to = 'mod.agent'
 rel = 'DEPENDS_ON'
-weight = 243
+weight = 352
 desc = '强耦合核心簇'
 
 [[edges]]
 from = 'mod.hermes_cli'
 to = 'mod.tools'
 rel = 'DEPENDS_ON'
-weight = 156
+weight = 316
 desc = '强耦合核心簇'
 
 [[edges]]
 from = 'mod.hermes_cli'
 to = 'mod.gateway'
 rel = 'DEPENDS_ON'
-weight = 89
+weight = 134
 
 [[edges]]
 from = 'mod.hermes_cli'
 to = 'mod.cron'
 rel = 'DEPENDS_ON'
-weight = 28
+weight = 41
 
 [[edges]]
 from = 'mod.hermes_cli'
 to = 'mod.plugins'
 rel = 'DEPENDS_ON'
-weight = 23
+weight = 24
 
 [[edges]]
 from = 'mod.hermes_cli'
 to = 'mod.providers'
 rel = 'DEPENDS_ON'
-weight = 9
+weight = 13
 
 [[edges]]
 from = 'mod.hermes_cli'
 to = 'mod.tui_gateway'
 rel = 'DEPENDS_ON'
-weight = 2
+weight = 7
 
 [[edges]]
 from = 'mod.hermes_cli'
@@ -468,74 +485,80 @@ weight = 1
 from = 'mod.agent'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 188
+weight = 331
 desc = '强耦合核心簇'
 
 [[edges]]
 from = 'mod.agent'
 to = 'mod.tools'
 rel = 'DEPENDS_ON'
-weight = 81
+weight = 113
 
 [[edges]]
 from = 'mod.agent'
 to = 'mod.providers'
 rel = 'DEPENDS_ON'
-weight = 14
+weight = 20
 
 [[edges]]
 from = 'mod.agent'
 to = 'mod.gateway'
 rel = 'DEPENDS_ON'
-weight = 7
+weight = 11
 
 [[edges]]
 from = 'mod.agent'
 to = 'mod.cron'
 rel = 'DEPENDS_ON'
-weight = 3
+weight = 5
 
 [[edges]]
 from = 'mod.agent'
 to = 'mod.plugins'
+rel = 'DEPENDS_ON'
+weight = 3
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 221
+desc = '强耦合核心簇'
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.agent'
+rel = 'DEPENDS_ON'
+weight = 195
+desc = '强耦合核心簇'
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.gateway'
+rel = 'DEPENDS_ON'
+weight = 87
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.plugins'
+rel = 'DEPENDS_ON'
+weight = 17
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.cron'
+rel = 'DEPENDS_ON'
+weight = 20
+
+[[edges]]
+from = 'mod.tools'
+to = 'mod.providers'
 rel = 'DEPENDS_ON'
 weight = 2
 
 [[edges]]
 from = 'mod.tools'
-to = 'mod.hermes_cli'
-rel = 'DEPENDS_ON'
-weight = 142
-desc = '强耦合核心簇'
-
-[[edges]]
-from = 'mod.tools'
-to = 'mod.agent'
-rel = 'DEPENDS_ON'
-weight = 123
-desc = '强耦合核心簇'
-
-[[edges]]
-from = 'mod.tools'
-to = 'mod.gateway'
-rel = 'DEPENDS_ON'
-weight = 67
-
-[[edges]]
-from = 'mod.tools'
-to = 'mod.plugins'
-rel = 'DEPENDS_ON'
-weight = 18
-
-[[edges]]
-from = 'mod.tools'
-to = 'mod.cron'
-rel = 'DEPENDS_ON'
-weight = 8
-
-[[edges]]
-from = 'mod.tools'
-to = 'mod.providers'
+to = 'mod.tui_gateway'
 rel = 'DEPENDS_ON'
 weight = 1
 
@@ -543,25 +566,25 @@ weight = 1
 from = 'mod.gateway'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 160
+weight = 255
 
 [[edges]]
 from = 'mod.gateway'
 to = 'mod.tools'
 rel = 'DEPENDS_ON'
-weight = 84
+weight = 133
 
 [[edges]]
 from = 'mod.gateway'
 to = 'mod.agent'
 rel = 'DEPENDS_ON'
-weight = 82
+weight = 132
 
 [[edges]]
 from = 'mod.gateway'
 to = 'mod.cron'
 rel = 'DEPENDS_ON'
-weight = 8
+weight = 14
 
 [[edges]]
 from = 'mod.gateway'
@@ -570,28 +593,34 @@ rel = 'DEPENDS_ON'
 weight = 3
 
 [[edges]]
+from = 'mod.gateway'
+to = 'mod.tui_gateway'
+rel = 'DEPENDS_ON'
+weight = 3
+
+[[edges]]
 from = 'mod.cron'
 to = 'mod.gateway'
 rel = 'DEPENDS_ON'
-weight = 18
+weight = 31
 
 [[edges]]
 from = 'mod.cron'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 18
+weight = 37
 
 [[edges]]
 from = 'mod.cron'
 to = 'mod.agent'
 rel = 'DEPENDS_ON'
-weight = 11
+weight = 25
 
 [[edges]]
 from = 'mod.cron'
 to = 'mod.tools'
 rel = 'DEPENDS_ON'
-weight = 9
+weight = 19
 
 [[edges]]
 from = 'mod.cron'
@@ -603,61 +632,61 @@ weight = 1
 from = 'mod.plugins'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 167
+weight = 238
 
 [[edges]]
 from = 'mod.plugins'
 to = 'mod.gateway'
 rel = 'DEPENDS_ON'
-weight = 133
+weight = 169
 
 [[edges]]
 from = 'mod.plugins'
 to = 'mod.tools'
 rel = 'DEPENDS_ON'
-weight = 115
+weight = 121
 
 [[edges]]
 from = 'mod.plugins'
 to = 'mod.agent'
 rel = 'DEPENDS_ON'
-weight = 71
+weight = 110
 
 [[edges]]
 from = 'mod.plugins'
 to = 'mod.providers'
 rel = 'DEPENDS_ON'
-weight = 64
+weight = 79
 
 [[edges]]
 from = 'mod.plugins'
 to = 'mod.cron'
 rel = 'DEPENDS_ON'
-weight = 5
+weight = 4
 
 [[edges]]
 from = 'mod.tui_gateway'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 127
+weight = 151
 
 [[edges]]
 from = 'mod.tui_gateway'
 to = 'mod.agent'
 rel = 'DEPENDS_ON'
-weight = 81
+weight = 102
 
 [[edges]]
 from = 'mod.tui_gateway'
 to = 'mod.tools'
 rel = 'DEPENDS_ON'
-weight = 51
+weight = 102
 
 [[edges]]
 from = 'mod.tui_gateway'
 to = 'mod.gateway'
 rel = 'DEPENDS_ON'
-weight = 5
+weight = 45
 
 [[edges]]
 from = 'mod.acp_adapter'
@@ -669,13 +698,13 @@ weight = 12
 from = 'mod.acp_adapter'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 10
+weight = 23
 
 [[edges]]
 from = 'mod.acp_adapter'
 to = 'mod.tools'
 rel = 'DEPENDS_ON'
-weight = 8
+weight = 6
 
 [[edges]]
 from = 'mod.acp_adapter'
@@ -687,49 +716,43 @@ weight = 1
 from = 'mod.providers'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 2
+weight = 4
 
 [[edges]]
 from = 'file.cli'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 117
+weight = 69
 
 [[edges]]
 from = 'file.cli'
 to = 'mod.agent'
 rel = 'DEPENDS_ON'
-weight = 50
+weight = 18
 
 [[edges]]
 from = 'file.cli'
 to = 'mod.tools'
 rel = 'DEPENDS_ON'
-weight = 36
+weight = 14
 
 [[edges]]
 from = 'file.cli'
 to = 'mod.gateway'
 rel = 'DEPENDS_ON'
-weight = 4
-
-[[edges]]
-from = 'file.cli'
-to = 'mod.cron'
-rel = 'DEPENDS_ON'
-weight = 1
+weight = 2
 
 [[edges]]
 from = 'file.run_agent'
 to = 'mod.agent'
 rel = 'DEPENDS_ON'
-weight = 102
+weight = 37
 
 [[edges]]
 from = 'file.run_agent'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 24
+weight = 8
 
 [[edges]]
 from = 'file.run_agent'
@@ -739,12 +762,6 @@ weight = 10
 
 [[edges]]
 from = 'file.run_agent'
-to = 'mod.providers'
-rel = 'DEPENDS_ON'
-weight = 2
-
-[[edges]]
-from = 'file.run_agent'
 to = 'mod.gateway'
 rel = 'DEPENDS_ON'
 weight = 1
@@ -753,19 +770,19 @@ weight = 1
 from = 'file.model_tools'
 to = 'mod.tools'
 rel = 'DEPENDS_ON'
-weight = 9
+weight = 11
 
 [[edges]]
 from = 'file.model_tools'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 8
+weight = 10
 
 [[edges]]
 from = 'file.model_tools'
 to = 'mod.agent'
 rel = 'DEPENDS_ON'
-weight = 1
+weight = 4
 
 [[edges]]
 from = 'file.model_tools'
@@ -777,7 +794,7 @@ weight = 1
 from = 'file.toolsets'
 to = 'mod.tools'
 rel = 'DEPENDS_ON'
-weight = 4
+weight = 1
 
 [[edges]]
 from = 'file.toolsets'
@@ -801,7 +818,13 @@ weight = 1
 from = 'file.hermes_state'
 to = 'mod.agent'
 rel = 'DEPENDS_ON'
-weight = 3
+weight = 1
+
+[[edges]]
+from = 'file.hermes_state'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 2
 
 [[edges]]
 from = 'file.hermes_logging'
@@ -813,13 +836,13 @@ weight = 2
 from = 'file.hermes_logging'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 2
+weight = 3
 
 [[edges]]
 from = 'file.hermes_constants'
 to = 'mod.hermes_cli'
 rel = 'DEPENDS_ON'
-weight = 2
+weight = 1
 
 [[edges]]
 from = 'file.hermes_time'
@@ -843,17 +866,29 @@ weight = 1
 from = 'file.mini_swe_runner'
 to = 'mod.agent'
 rel = 'DEPENDS_ON'
-weight = 3
+weight = 2
 
 [[edges]]
 from = 'file.mini_swe_runner'
 to = 'mod.tools'
 rel = 'DEPENDS_ON'
-weight = 3
+weight = 1
 
 [[edges]]
 from = 'file.hermes_bootstrap'
 to = 'mod.tools'
+rel = 'DEPENDS_ON'
+weight = 1
+
+[[edges]]
+from = 'file.utils'
+to = 'mod.hermes_cli'
+rel = 'DEPENDS_ON'
+weight = 2
+
+[[edges]]
+from = 'file.utils'
+to = 'mod.agent'
 rel = 'DEPENDS_ON'
 weight = 1
 

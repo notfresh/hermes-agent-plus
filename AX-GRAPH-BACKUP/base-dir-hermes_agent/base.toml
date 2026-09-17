@@ -1,0 +1,5 @@
+[base]
+type = "dir"
+source = "/root/projects/hermes-agent-plus"
+repo = "/root/projects/hermes-agent-plus"
+desc = "Hermes Agent 源码项目图（任务 0012 原图迁移）"
