@@ -823,10 +823,12 @@ class GatewayInboundMixin(GatewayPluginInjectionMixin):
         command = event.get_command()
         _cmd_def, canonical = _canon(command)
 
-        # Expand alias quick commands before built-in dispatch so targets like /model openai/gpt-5.5
-        # --provider openrouter reach the /model handler. Built-ins keep precedence: aliases only
-        # need early handling when the typed command is not already known.
-        if command and _cmd_def is None:
+        # Expand alias quick commands BEFORE built-in dispatch so user aliases take precedence
+        # over built-ins (kimi #3158 port; mirrors the CLI's alias-first ordering). Targets like
+        # `/model openai/gpt-5.5 --provider openrouter` reach the /model handler. `type: exec` is
+        # NOT expanded here — it keeps built-in precedence so a shell snippet can never shadow
+        # /stop and friends. The rewritten event.text is fed back through canon resolution above.
+        if command:
             qcmd = self._hm_quick_commands().get(command)
             if qcmd is not None and qcmd.get("type") == "alias":
                 new_command = self._hm_expand_alias_quick_command(event, qcmd)

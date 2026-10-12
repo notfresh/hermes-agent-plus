@@ -569,8 +569,17 @@ def _(rid, params: dict) -> dict:
 # returns a JSON-RPC envelope, or None to fall through to the next stage.
 
 
+def _dispatch_alias(rid, params, session, name, arg):
+    """Handle /alias list/set — lives here so TUI/desktop share one implementation."""
+    if name != "alias":
+        return None
+    qcmds = _load_cfg().get("quick_commands", {}) or {}
+    return _handle_alias_dispatch(rid, arg, qcmds)
+
+
 def _dispatch_quick(rid, params, session, name, arg):
-    qc = _load_cfg().get("quick_commands", {}).get(name)
+    qcmds = _load_cfg().get("quick_commands", {}) or {}
+    qc = qcmds.get(name)
     if qc is None:
         return None
     if qc.get("type") == "exec":
@@ -582,7 +591,43 @@ def _dispatch_quick(rid, params, session, name, arg):
         if r.returncode != 0:
             return _err(rid, 4018, output or f"quick command failed with exit code {r.returncode}")
         return _exec_out(rid, output)
-    return _ok(rid, {"type": "alias", "target": qc.get("target", "")}) if qc.get("type") == "alias" else None
+    if qc.get("type") == "alias":
+        # Walk alias chain to find the final non-alias target (cycle-safe).
+        target = (qc.get("target") or "").strip()
+        seen = {name}
+        while target:
+            t_base = target.lstrip("/").split(maxsplit=1)[0]
+            if t_base in seen:
+                return _err(rid, 4018, "alias cycle detected: " + " → ".join(sorted(seen)) + f" → {t_base}")
+            seen.add(t_base)
+            t_qc = qcmds.get(t_base) if isinstance(qcmds, dict) else None
+            if t_qc and t_qc.get("type") == "alias":
+                target = (t_qc.get("target") or "").strip()
+                continue
+            break
+        return _ok(rid, {"type": "alias", "target": target or name})
+    return None
+
+
+def _handle_alias_dispatch(rid, args, qcmds) -> dict:
+    """`/alias` — list or set user-defined quick-command aliases (git style)."""
+    def _ok(result):
+        return {"jsonrpc": "2.0", "id": rid, "result": result}
+    def _err(code, msg):
+        return {"jsonrpc": "2.0", "id": rid, "error": {"code": code, "message": msg}}
+
+    config = {"quick_commands": qcmds or {}}
+    from hermes_cli.commands import AliasHandler
+    result = AliasHandler.handle_alias_command(args or "", config)
+
+    if result.action == "list":
+        output = "\n".join(f"  /{a['name']} → {a['target']}" for a in result.aliases)
+        return _ok({"type": "exec", "output": output})
+    elif result.action == "set":
+        output = f"✅ /{result.name} → {result.target} (immediate){result.warning or ''}"
+        return _ok({"type": "exec", "output": output})
+    else:
+        return _err(4004, result.error or "unknown error")
 
 
 def _plugin_command_handler(name: str):
@@ -1099,7 +1144,7 @@ def _(rid, params: dict) -> dict:
     # around the whole loop: the routing guard (``_profile_skill_command``) and the stages
     # must resolve against the SAME profile or a secondary-only skill is routed here and then
     # not found (#110695).
-    stages = (_dispatch_quick, _dispatch_plugin, _dispatch_bundle, _dispatch_skill, _SLASH_BUILTINS.get(name))
+    stages = (_dispatch_alias, _dispatch_quick, _dispatch_plugin, _dispatch_bundle, _dispatch_skill, _SLASH_BUILTINS.get(name))
     with _session_home_scope(session):
         for stage in filter(None, stages):
             res = stage(rid, params, session, name, arg)
@@ -1135,6 +1180,13 @@ def _(rid, params: dict) -> dict:
         target = base if base in _PENDING_INPUT_COMMANDS else _bundle_key_for(base)
     if target is not None:
         return _methods["command.dispatch"](rid, {"name": target.lstrip("/"), "arg": arg, "session_id": sid})
+    # User-defined quick commands must also route to command.dispatch — the slash worker
+    # subprocess knows nothing about them. Without this, quick commands silently die.
+    _qcmds = _load_cfg().get("quick_commands", {}) or {}
+    if base in _qcmds:
+        return _methods["command.dispatch"](
+            rid, {"name": base, "arg": arg, "session_id": sid}
+        )
     # Recognized skills keep the 4018 gate so clients command.dispatch. A scan
     # exception must not fail open into the worker: return the dispatch payload
     # (or a hard error) here, or the loading banner swallows the prompt.

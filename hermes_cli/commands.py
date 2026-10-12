@@ -185,6 +185,8 @@ COMMAND_REGISTRY: list[CommandDef] = [
                args_hint="[name]", argument_mode="mixed"),
     CommandDef("sessions", "Browse and resume previous sessions", "Session"),
 
+    CommandDef("alias", "List or set user-defined quick-command aliases (git-style, e.g. /alias /ss \"/sessions\")", "Configuration",
+               aliases=("aliases",), args_hint='[/<name> "<expansion>"]'),
     # Configuration
     CommandDef("config", "Show current configuration", "Configuration",
                cli_only=True, desktop="terminal"),
@@ -567,3 +569,134 @@ def __getattr__(name):  # PEP 562 — COMMANDS / COMMANDS_BY_CATEGORY are built 
     if localized is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     return localized()
+
+
+@dataclass
+class AliasResult:
+    """Result of /alias command handling."""
+    action: str  # "list" | "set" | "error"
+    aliases: list | None = None
+    name: str | None = None
+    target: str | None = None
+    error: str | None = None
+    warning: str | None = None
+
+
+class AliasHandler:
+    """Shared handler for /alias command logic across CLI, Gateway, and TUI."""
+
+    @staticmethod
+    def get_quick_commands(config: dict) -> dict:
+        """Extract quick_commands dict from config, handling both dict and object forms."""
+        if isinstance(config, dict):
+            return config.get("quick_commands", {}) or {}
+        return getattr(config, "quick_commands", {}) or {}
+
+    @staticmethod
+    def validate_alias_name(name: str) -> bool:
+        """Validate alias name matches allowed pattern."""
+        return bool(re.match(r"^[a-zA-Z0-9_:/.-]+$", name))
+
+    @staticmethod
+    def check_shadow(name: str) -> str:
+        """Check if name shadows a built-in command. Returns warning string or empty."""
+        if resolve_command(name) is not None:
+            return f"\n⚠ /{name} shadows a built-in command (user alias wins)"
+        return ""
+
+    @staticmethod
+    def parse_alias_args(args: str) -> tuple[str, str, str]:
+        """Parse /alias /name "body" style input. Returns (error, name, body)."""
+        if not args or not args.strip():
+            return ("", "", "")
+        space_idx = args.find(" ")
+        if space_idx == -1:
+            return ('usage: /alias /<name> "<expansion>"  (or /alias alone to list)', "", "")
+        raw_name = args[:space_idx].strip()
+        raw_body = args[space_idx + 1:].strip()
+        name = raw_name[1:] if raw_name.startswith("/") else raw_name
+        if not AliasHandler.validate_alias_name(name):
+            return (f'invalid alias name "{raw_name}" — use letters, digits, _, :, /, ., -', "", "")
+        if not raw_body:
+            return ('missing expansion body — wrap the target in quotes, e.g. /alias ss "/sessions"', "", "")
+        body = raw_body
+        if len(body) >= 2 and body[0] == body[-1] and body[0] in "\"'":
+            body = body[1:-1]
+        if not body:
+            return ("expansion body is empty after quote-stripping", "", "")
+        body = body[1:] if body.startswith("/") else body
+        return ("", name, body)
+
+    @staticmethod
+    def list_aliases(config: dict) -> list[dict]:
+        """Return list of configured aliases: [{"name": str, "target": str}, ...]"""
+        qcs = AliasHandler.get_quick_commands(config)
+        return [
+            {"name": k, "target": v.get("target", "")}
+            for k, v in qcs.items()
+            if isinstance(v, dict) and v.get("type") == "alias"
+        ]
+
+    @staticmethod
+    def handle_alias_command(args: str, config: dict) -> AliasResult:
+        """Main entry point. Returns AliasResult with structured data."""
+        # list mode
+        if not args or not args.strip():
+            aliases = AliasHandler.list_aliases(config)
+            if not aliases:
+                return AliasResult(
+                    action="error",
+                    error='No aliases configured — add one with: /alias /<name> "<expansion>"'
+                )
+            return AliasResult(action="list", aliases=sorted(aliases, key=lambda x: x["name"]))
+
+        # parse args
+        error, name, body = AliasHandler.parse_alias_args(args)
+        if error:
+            return AliasResult(action="error", error=error)
+
+        # write config
+        from cli import save_config_value
+        ok = save_config_value(f"quick_commands.{name}", {"type": "alias", "target": f"/{body}"})
+        if not ok:
+            return AliasResult(action="error", error="failed to write config.yaml")
+
+        # sync memory
+        qcs = AliasHandler.get_quick_commands(config)
+        qcs[name] = {"type": "alias", "target": f"/{body}"}
+        if isinstance(config, dict):
+            config["quick_commands"] = qcs
+        else:
+            config.quick_commands = qcs
+
+        # check shadow
+        warning = AliasHandler.check_shadow(name)
+
+        return AliasResult(action="set", name=name, target=f"/{body}", warning=warning)
+
+    @staticmethod
+    def expand_alias_chain(name: str, config: dict) -> tuple[str | None, str | None]:
+        """Expand an alias chain to its final non-alias target.
+
+        Returns (final_target, None) on success, or (None, error_message) on error.
+        Detects cycles by checking if the resolved target is already in the visited set.
+        """
+        visited: set[str] = set()
+        current = name
+        while True:
+            visited.add(current)
+            qcs = AliasHandler.get_quick_commands(config)
+            entry = qcs.get(current)
+            if not isinstance(entry, dict) or entry.get("type") != "alias":
+                return (None, f"'{current}' is not an configured alias")
+            target = (entry.get("target") or "").strip()
+            if not target:
+                return (None, f"alias '{current}' has empty target")
+            resolved = target[1:] if target.startswith("/") else target
+            if resolved in visited:
+                return (None, f"cycle detected: {' → '.join(sorted(visited))} → {resolved}")
+            # Check if resolved is a built-in command (stop here, return the resolved target)
+            if resolve_command(resolved) is not None:
+                return (resolved, None)
+            # Continue traversing
+            current = resolved

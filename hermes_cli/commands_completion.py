@@ -465,6 +465,29 @@ class SlashCommandCompleter(Completer):
         except Exception:
             pass
 
+        # User-defined quick commands from config.yaml. They autocomplete in both
+        # CLI and TUI (slash command completer is shared). Alias/exec entries
+        # get a ⚡ hint so users can tell them apart from built-ins.
+        try:
+            from hermes_cli.config import load_config_readonly
+            _qc_cfg = load_config_readonly().get("quick_commands") or {}
+            if isinstance(_qc_cfg, dict):
+                for qname, qc in sorted(_qc_cfg.items()):
+                    if not isinstance(qc, dict) or not qname.startswith(word):
+                        continue
+                    if f"/{qname}" in COMMANDS:
+                        continue  # shadowed built-in — single entry in dropdown
+                    _qtype = qc.get("type", "")
+                    if _qtype == "alias":
+                        _qmeta = f"⚡ alias → {qc.get('target', '')}"
+                    elif _qtype == "exec":
+                        _qmeta = "⚡ exec: " + str(qc.get("command", ""))
+                    else:
+                        _qmeta = "⚡ user command"
+                    yield _cmd_completion(qname, _qmeta[:80])
+        except Exception:
+            pass
+
 
 class SlashCommandAutoSuggest(AutoSuggest):
     """Inline ghost-text for slash commands and subcommands; history fallback for other input."""

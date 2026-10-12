@@ -3669,7 +3669,8 @@ from . import (
     methods_complete as _methods_complete, methods_config as _methods_config,
     methods_config_set as _methods_config_set, methods_images as _methods_images,
     methods_profiles as _methods_profiles, methods_prompt as _methods_prompt, methods_session as _methods_session,
-    methods_tools as _methods_tools, prompt_turn as _prompt_turn, billing_view as _billing_view,
+    methods_tools as _methods_tools,
+    prompt_turn as _prompt_turn, billing_view as _billing_view,
     methods_projects as _methods_projects, methods_session_foreign as _methods_session_foreign,
     methods_session_control as _methods_session_control, methods_subagents as _methods_subagents,
     methods_vault as _methods_vault, methods_free_tier as _methods_free_tier,
@@ -3677,6 +3678,11 @@ from . import (
     methods_display as _methods_display, methods_display_watch as _methods_display_watch,
     methods_onboarding as _methods_onboarding, methods_i18n as _methods_i18n,
     methods_shared_metrics as _methods_shared_metrics, methods_start_chat as _methods_start_chat)
+
+# Rebound handler helper: /alias command implementation lives in methods_tools.py, but
+# command.dispatch's __globals__ are THIS module's after register() — a plain def in
+# methods_tools would be unreachable without this rebound.
+from .methods_tools import _handle_alias_dispatch  # noqa: E402
 
 for _m in (
     _session_transports, _session_reaper, _session_lifecycle, _session_workdir, _compute_host_bridge, _model_switch,

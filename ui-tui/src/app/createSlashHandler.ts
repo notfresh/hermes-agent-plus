@@ -1,7 +1,7 @@
 import { parseCommandDispatch, parseSlashCommand } from '@hermes/shared/slash'
 
 import type { GatewayClient } from '../gatewayClient.js'
-import type { SlashExecResponse } from '../gatewayTypes.js'
+import type { CommandsCatalogResponse, SlashExecResponse } from '../gatewayTypes.js'
 import { rpcErrorMessage } from '../lib/rpc.js'
 import { launchWidget } from '../sdk/host.js'
 import { getWidgetApp } from '../sdk/registry.js'
@@ -62,6 +62,25 @@ export function createSlashHandler(ctx: SlashHandlerContext): (cmd: string, type
     }
 
     const runCtx: SlashRunCtx = { ...ctx, flight, guarded, guardedErr, sid, stale, ui }
+
+    // Re-fetch the backend command catalog after a successful /alias set so the new
+    // quick command appears in completion + the command palette immediately.
+    const refreshCommandCatalog = (): void => {
+      gw.request<CommandsCatalogResponse>('commands.catalog', {})
+        .then((catalog: CommandsCatalogResponse | null) => {
+          if (stale() || !catalog?.pairs) {
+            return
+          }
+          ctx.local.setCatalog({
+            canon: (catalog.canon ?? {}) as Record<string, string>,
+            categories: catalog.categories ?? [],
+            pairs: catalog.pairs as [string, string][],
+            skillCount: (catalog.skill_count ?? 0) as number,
+            sub: (catalog.sub ?? {}) as Record<string, string[]>,
+          })
+        })
+        .catch(() => {})
+    }
 
     const found = findSlashCommand(parsed.name)
 
@@ -129,6 +148,11 @@ export function createSlashHandler(ctx: SlashHandlerContext): (cmd: string, type
       }
 
       if (d.type === 'exec' || d.type === 'plugin') {
+        if (d.type === 'exec' && parsed.name === 'alias') {
+          // A successful /alias set may have added/updated a quick command.
+          // Refresh the catalog so it appears in completion + palette now.
+          refreshCommandCatalog()
+        }
         return sys(d.output || '(no output)')
       }
 

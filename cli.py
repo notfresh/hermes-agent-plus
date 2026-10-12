@@ -1133,6 +1133,22 @@ class HermesCLI(CLIInitMixin, CLITuiRuntimeMixin, CLIProcessNotificationsMixin, 
                 print(f"  {_t(label_key):<{label_width}} {value}")
         print()
 
+    def _handle_alias_command(self, cmd_original: str) -> None:
+        """`/alias` — list or set user-defined quick-command aliases (git style)."""
+        from hermes_cli.commands import AliasHandler
+
+        parts = cmd_original.split(None, 1)
+        args = parts[1].strip() if len(parts) > 1 else ""
+        result = AliasHandler.handle_alias_command(args, self.config)
+
+        if result.action == "list":
+            lines = [f"  [bold]/{a['name']}[/] → {a['target']}" for a in result.aliases]
+            self._console_print("\n".join(lines))
+        elif result.action == "set":
+            self._console_print(f"  ✅ /{result.name} → {result.target} (immediate){result.warning}")
+        else:
+            self._console_print(f"[bold red]{result.error}[/]")
+
     # canonical command -> (method name, pass cmd_original?). Absent commands resolve to
     # ``_handle_<name>_command(cmd)``. Looked up via getattr at dispatch time so
     # monkeypatching works. A handler returning False exits the REPL.
@@ -1140,7 +1156,7 @@ class HermesCLI(CLIInitMixin, CLITuiRuntimeMixin, CLIProcessNotificationsMixin, 
         "exit": ("_cmd_exit", True), "quit": ("_cmd_exit", True), "help": ("_cmd_help", True),
         "palette": ("_open_command_palette", False), "whoami": ("_handle_whoami_command", False),
         "profile": ("_handle_profile_command", False), "toolsets": ("show_toolsets", False),
-        "config": ("show_config", False), "redraw": ("_cmd_redraw", True), "clear": ("_cmd_clear", True),
+        "config": ("show_config", False), "alias": ("_handle_alias_command", True), "redraw": ("_cmd_redraw", True), "clear": ("_cmd_clear", True),
         "history": ("show_history", False), "title": ("_cmd_title", True), "new": ("_cmd_new", True),
         "model": ("_handle_model_switch", True), "codex-runtime": ("_handle_codex_runtime", True),
         "retry": ("_cmd_retry", True), "prompt": ("_handle_prompt_compose_command", True),
@@ -1171,9 +1187,10 @@ class HermesCLI(CLIInitMixin, CLITuiRuntimeMixin, CLIProcessNotificationsMixin, 
     # (the TUI slash worker: tui_gateway records the command it forwards).
     _slash_metrics_surface: str | None = "cli"
 
-    def process_command(self, command: str, *, redispatch: bool = False) -> bool:
+    def process_command(self, command: str, *, redispatch: bool = False, _alias_depth: int = 0) -> bool:
         """Dispatch a slash command; returns False to exit the REPL. ``redispatch`` marks an internal
-        re-entry (quick-command alias, prefix expansion) so the user's command is counted once."""
+        re-entry (quick-command alias, prefix expansion) so the user's command is counted once.
+        ``_alias_depth`` prevents alias→alias→alias infinite recursion (single-hop guard)."""
         cmd_lower = command.lower().strip()  # lowercase only for matching; args keep their case
         cmd_original = command.strip()
 
@@ -1182,6 +1199,27 @@ class HermesCLI(CLIInitMixin, CLITuiRuntimeMixin, CLIProcessNotificationsMixin, 
         _base_word = cmd_lower.split()[0].lstrip("/")
         _cmd_def = _resolve_cmd(_base_word)
         canonical = _cmd_def.name if _cmd_def else _base_word
+
+        # ── User-defined quick commands: git-style ALIASES take precedence over
+        # built-ins (kimi #3158 port). Only `type: alias` participates; `type: exec`
+        # stays in the fallback path so a shell snippet can never shadow /stop silently.
+        # Expansion is single-hop (_alias_depth guard) so `a → b → a` cycles error out.
+        _qcs = self.config.get("quick_commands", {}) or {}
+        if _base_word in _qcs and isinstance(_qcs[_base_word], dict) and _qcs[_base_word].get("type") == "alias":
+            if _cmd_def is not None:
+                _cprint(f"  {_DIM}⚠ /{_base_word} shadows built-in /{canonical} (user alias wins){_RST}")
+            _qc = _qcs[_base_word]
+            _qc_target = (_qc.get("target") or "").strip()
+            if not _qc_target:
+                self._console_print(f"[bold red]Quick command '{_base_word}' has no target defined[/]")
+                return True
+            if _alias_depth >= 1:
+                self._console_print("[bold red]Alias chain too deep — refusing to expand further[/]")
+                return True
+            _qc_target = _qc_target if _qc_target.startswith("/") else f"/{_qc_target}"
+            _user_args = cmd_original[len(cmd_lower.split()[0]):].strip()
+            _aliased = f"{_qc_target} {_user_args}".strip()
+            return self.process_command(_aliased, redispatch=True, _alias_depth=_alias_depth + 1)
         if not redispatch and self._slash_metrics_surface:
             from hermes_cli.observability.shared_metrics_events import record_slash_command
             record_slash_command(command=canonical, surface=self._slash_metrics_surface)
@@ -1236,11 +1274,12 @@ class HermesCLI(CLIInitMixin, CLITuiRuntimeMixin, CLIProcessNotificationsMixin, 
         """User-defined quick command (config.yaml): ``exec`` runs a shell snippet, ``alias`` re-dispatches."""
         qtype = qcmd.get("type")
         if qtype == "alias":
-            target = qcmd.get("target", "").strip()
-            if target:
-                target = target if target.startswith("/") else f"/{target}"
-                return self.process_command(f"{target} {user_args}".strip(), redispatch=True)
-            self._console_print(f"[bold red]{_t('cli.quick.no_target', command=base_cmd)}[/]")
+            # Alias expansion happens BEFORE built-in dispatch (user aliases win, kimi #3158 port);
+            # this branch is dead unless config changes shape mid-run — keep the message for diagnostics.
+            self._console_print(
+                f"[bold red]Quick command '{base_cmd}' resolved after built-in dispatch — "
+                "alias expansion moved earlier; check config.yaml[/]"
+            )
             return True
         if qtype != "exec":
             self._console_print(f"[bold red]{_t('cli.quick.unsupported_type', command=base_cmd)}[/]")
