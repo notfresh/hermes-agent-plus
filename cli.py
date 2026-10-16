@@ -1139,6 +1139,23 @@ class HermesCLI(CLIInitMixin, CLITuiRuntimeMixin, CLIProcessNotificationsMixin, 
                 print(f"  {label} {value}")
         print()
 
+    def _handle_alias_command(self, cmd_original: str) -> None:
+        """List or set user-defined quick-command aliases."""
+        from hermes_cli.aliases import manage_aliases
+        from cli import save_config_value
+
+        parts = cmd_original.split(None, 1)
+        args = parts[1].strip() if len(parts) > 1 else ""
+        result = manage_aliases(args, self.config, save_config_value)
+
+        if result.action == "list":
+            lines = [f"  [bold]/{alias['name']}[/] -> {alias['target']}" for alias in result.aliases]
+            self._console_print("\n".join(lines))
+        elif result.action == "set":
+            self._console_print(f"  /{result.name} -> {result.target} (immediate){result.warning}")
+        else:
+            self._console_print(f"[bold red]{result.error}[/]")
+
     # canonical command -> (method name, pass cmd_original?). Absent commands resolve to
     # ``_handle_<name>_command(cmd)``. Looked up via getattr at dispatch time so
     # monkeypatching works. A handler returning False exits the REPL.
@@ -1146,7 +1163,7 @@ class HermesCLI(CLIInitMixin, CLITuiRuntimeMixin, CLIProcessNotificationsMixin, 
         "exit": ("_cmd_exit", True), "quit": ("_cmd_exit", True), "help": ("_cmd_help", True),
         "palette": ("_open_command_palette", False), "whoami": ("_handle_whoami_command", False),
         "profile": ("_handle_profile_command", False), "toolsets": ("show_toolsets", False),
-        "config": ("show_config", False), "redraw": ("_cmd_redraw", True), "clear": ("_cmd_clear", True),
+        "config": ("show_config", False), "alias": ("_handle_alias_command", True), "redraw": ("_cmd_redraw", True), "clear": ("_cmd_clear", True),
         "history": ("show_history", False), "title": ("_cmd_title", True), "new": ("_cmd_new", True),
         "model": ("_handle_model_switch", True), "codex-runtime": ("_handle_codex_runtime", True),
         "retry": ("_cmd_retry", True), "prompt": ("_handle_prompt_compose_command", True),
@@ -1173,7 +1190,7 @@ class HermesCLI(CLIInitMixin, CLITuiRuntimeMixin, CLIProcessNotificationsMixin, 
                 entry = (name, True)
         return entry
 
-    def process_command(self, command: str) -> bool:
+    def process_command(self, command: str, *, redispatch: bool = False) -> bool:
         """Dispatch a slash command; returns False to exit the REPL."""
         cmd_lower = command.lower().strip()  # lowercase only for matching; args keep their case
         cmd_original = command.strip()
@@ -1183,6 +1200,16 @@ class HermesCLI(CLIInitMixin, CLITuiRuntimeMixin, CLIProcessNotificationsMixin, 
         _base_word = cmd_lower.split()[0].lstrip("/")
         _cmd_def = _resolve_cmd(_base_word)
         canonical = _cmd_def.name if _cmd_def else _base_word
+
+        from hermes_cli.aliases import resolve_alias
+        alias = resolve_alias(command, self.config.get("quick_commands", {}))
+        if alias is not None:
+            if alias.error:
+                self._console_print(f"[bold red]{alias.error}[/]")
+                return True
+            if _cmd_def is not None:
+                _cprint(f"  {_DIM}WARNING: /{_base_word} shadows built-in /{canonical} (user alias wins){_RST}")
+            return self.process_command(alias.command, redispatch=True)
 
         # Observer-only pre_command plugin hook (return values ignored; never raises).
         if _cmd_def is not None:

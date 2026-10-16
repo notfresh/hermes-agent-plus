@@ -1306,6 +1306,18 @@ class GatewaySlashCommandsMixin(
             exit_code_path.unlink(missing_ok=True)
             return t("gateway.update.start_failed", error=e)
         self._schedule_update_notification_watch()
+
+    async def _handle_alias_command(self, event: MessageEvent) -> str:
+        """List or set user-defined quick-command aliases."""
+        from hermes_cli.aliases import manage_aliases
+        from cli import save_config_value
+
+        result = manage_aliases((event.get_command_args() or "").strip(), self.config, save_config_value)
+        if result.action == "list":
+            return "\n".join(f"  /{alias['name']} -> {alias['target']}" for alias in result.aliases)
+        if result.action == "set":
+            return f"/{result.name} -> {result.target} (immediate){result.warning or ''}"
+        return f"[error] {result.error}"
         return t("gateway.update.starting")
 
 

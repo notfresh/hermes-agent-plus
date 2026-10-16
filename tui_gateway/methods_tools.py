@@ -547,6 +547,23 @@ def _(rid, params: dict) -> dict:
 # returns a JSON-RPC envelope, or None to fall through to the next stage.
 
 
+def _dispatch_alias(rid, params, session, name, arg):
+    """Handle /alias list/set for TUI and desktop clients."""
+    if name != "alias":
+        return None
+    from hermes_cli.aliases import manage_aliases
+    from cli import save_config_value
+
+    result = manage_aliases(arg, {"quick_commands": _load_cfg().get("quick_commands", {}) or {}}, save_config_value)
+    if result.action == "list":
+        output = "\n".join(f"  /{alias['name']} -> {alias['target']}" for alias in result.aliases)
+        return _ok(rid, {"type": "exec", "output": output})
+    if result.action == "set":
+        output = f"/{result.name} -> {result.target} (immediate){result.warning or ''}"
+        return _ok(rid, {"type": "exec", "output": output})
+    return _err(rid, 4004, result.error or "unknown error")
+
+
 def _dispatch_quick(rid, params, session, name, arg):
     qc = _load_cfg().get("quick_commands", {}).get(name)
     if qc is None:
@@ -560,7 +577,16 @@ def _dispatch_quick(rid, params, session, name, arg):
         if r.returncode != 0:
             return _err(rid, 4018, output or f"quick command failed with exit code {r.returncode}")
         return _exec_out(rid, output)
-    return _ok(rid, {"type": "alias", "target": qc.get("target", "")}) if qc.get("type") == "alias" else None
+    if qc.get("type") == "alias":
+        from hermes_cli.aliases import resolve_alias
+
+        alias = resolve_alias(f"/{name} {arg}".strip(), _load_cfg().get("quick_commands", {}))
+        if alias is None:
+            return None
+        if alias.error:
+            return _err(rid, 4018, alias.error)
+        return _ok(rid, {"type": "alias", "target": alias.target})
+    return None
 
 
 def _plugin_command_handler(name: str):
@@ -923,7 +949,7 @@ def _(rid, params: dict) -> dict:
     # around the whole loop: the routing guard (``_is_profile_skill_command``) and the stages
     # must resolve against the SAME profile or a secondary-only skill is routed here and then
     # not found (#110695).
-    stages = (_dispatch_quick, _dispatch_plugin, _dispatch_bundle, _dispatch_skill, _SLASH_BUILTINS.get(name))
+    stages = (_dispatch_alias, _dispatch_quick, _dispatch_plugin, _dispatch_bundle, _dispatch_skill, _SLASH_BUILTINS.get(name))
     with _session_home_scope(session):
         for stage in filter(None, stages):
             res = stage(rid, params, session, name, arg)

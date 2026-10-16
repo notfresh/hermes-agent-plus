@@ -152,6 +152,8 @@ COMMAND_REGISTRY: list[CommandDef] = [
     CommandDef("sessions", "Browse and resume previous sessions", "Session"),
 
     # Configuration
+    CommandDef("alias", "List or set user-defined quick-command aliases (git-style, e.g. /alias /ss \"/sessions\")", "Configuration",
+               aliases=("aliases",), args_hint='[/<name> "<expansion>"]'),
     CommandDef("config", "Show current configuration", "Configuration",
                cli_only=True, desktop="terminal"),
     CommandDef("model", "Switch model (session-scoped; --global to persist)", "Configuration",

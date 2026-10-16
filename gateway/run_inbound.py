@@ -733,15 +733,11 @@ class GatewayInboundMixin:
         return qc if isinstance(qc, dict) else {}
 
     @staticmethod
-    def _hm_expand_alias_quick_command(event: "MessageEvent", qcmd: dict) -> Optional[str]:
-        """Rewrite ``event.text`` to an alias quick command's target; returns the new command name."""
-        target = (qcmd.get("target") or "").strip()
-        if not target:
-            return None
-        target = target if target.startswith("/") else f"/{target}"
-        event.text = f"{target} {event.get_command_args().strip()}".strip()
-        target_command = target.lstrip("/")
-        return target_command.split()[0] if target_command else target_command
+    def _hm_resolve_alias(command_text: str, quick_commands: dict):
+        """Delegate alias interpretation to the shared resolver."""
+        from hermes_cli.aliases import resolve_alias
+
+        return resolve_alias(command_text, quick_commands)
 
     async def _hm_command_hooks(
         self, event: "MessageEvent", source: SessionSource, _quick_key: str, command: str, canonical: str
@@ -805,16 +801,15 @@ class GatewayInboundMixin:
         command = event.get_command()
         _cmd_def, canonical = _canon(command)
 
-        # Expand alias quick commands before built-in dispatch so targets like /model openai/gpt-5.5
-        # --provider openrouter reach the /model handler. Built-ins keep precedence: aliases only
-        # need early handling when the typed command is not already known.
-        if command and _cmd_def is None:
-            qcmd = self._hm_quick_commands().get(command)
-            if qcmd is not None and qcmd.get("type") == "alias":
-                new_command = self._hm_expand_alias_quick_command(event, qcmd)
-                if new_command is not None:
-                    command = new_command
-                    _cmd_def, canonical = _canon(command)
+        # Expand aliases before built-in dispatch; access control and hooks stay gateway-owned.
+        if command:
+            alias = self._hm_resolve_alias(event.text, self._hm_quick_commands())
+            if alias is not None:
+                if alias.error:
+                    return True, alias.error, command, canonical
+                event.text = alias.command
+                command = event.get_command()
+                _cmd_def, canonical = _canon(command)
 
         if not (command and canonical and is_gateway_known_command(canonical)):
             return False, None, command, canonical
@@ -1048,10 +1043,11 @@ class GatewayInboundMixin:
                 return True, await self._hm_run_exec_quick_command(command, exec_cmd), command
             if qtype != "alias":
                 return True, f"Quick command '/{command}' has unsupported type (supported: 'exec', 'alias').", command
-            new_command = self._hm_expand_alias_quick_command(event, qcmd)
-            if new_command is None:
+            alias = self._hm_resolve_alias(event.text, self._hm_quick_commands())
+            if alias is None or alias.error:
                 return True, f"Quick command '/{command}' has no target defined.", command
-            command = new_command  # Fall through to normal command dispatch below
+            event.text = alias.command
+            command = event.get_command()  # Fall through to normal command dispatch below
 
         # Plugin-registered slash commands. Underscores normalize to hyphens so Telegram's
         # underscored autocomplete form matches plugin commands registered with hyphens.
