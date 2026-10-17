@@ -1852,6 +1852,10 @@ _strip_media_directives = _strip_media_tag_directives
 class BasePlatformAdapter(ABC):
     """Base class for platform adapters: connect/auth, receive, send, handle media."""
 
+    def handle_runtime_config(self, source, args: str) -> str:
+        """Handle a platform-specific runtime configuration command."""
+        return "Runtime configuration is not supported on this platform."
+
     # ``format_message`` renders ``` fences as real code blocks (tool-progress then sends a bare
     # fenced terminal command; plain-text platforms get the preview).
     supports_code_blocks: bool = False

@@ -30,6 +30,7 @@ import logging
 import mimetypes
 import os
 import re
+import shlex
 import threading
 import time
 import uuid
@@ -91,6 +92,10 @@ from gateway.platforms.base import (
 from gateway.platforms.event import MessageEvent, MessageType, ProcessingOutcome
 from gateway.status import acquire_scoped_lock, release_scoped_lock
 from hermes_constants import get_hermes_home
+from plugins.platforms.feishu.feishu_noat import (
+    FeishuNoAtOverrideStore,
+    OverridePersistenceError,
+)
 from utils import atomic_json_write, env_float, env_int
 
 from gateway.platforms._shared import (
@@ -1331,6 +1336,7 @@ class FeishuAdapter(BasePlatformAdapter):
         self._media_batch_state = FeishuBatchState()
         self._pending_media_batches = self._media_batch_state.events
         self._pending_media_batch_tasks = self._media_batch_state.tasks
+        self._noat_overrides = FeishuNoAtOverrideStore()
         # Button-card state: id → {session_key, message_id, chat_id}
         self._approval_state: Dict[int, Dict[str, str]] = {}
         self._approval_counter = itertools.count(1)
@@ -3344,7 +3350,7 @@ class FeishuAdapter(BasePlatformAdapter):
         is_bot = _is_bot_sender(sender)
         is_group = getattr(message, "chat_type", "p2p") != "p2p"
         chat_id = getattr(message, "chat_id", "") or ""
-        require_mention = is_group and self._require_mention_for(chat_id)
+        require_mention = is_group and self._require_mention_for(chat_id, sender)
         # Defensive only — Feishu doesn't echo our outbound back as inbound,
         # and open_id is always populated on both sides.
         if self_ids and sender_ids & self_ids:
@@ -3393,11 +3399,71 @@ class FeishuAdapter(BasePlatformAdapter):
             self._warned_empty_allowlist_deny = True
             logger.warning(text)
 
-    def _require_mention_for(self, chat_id: str) -> bool:
+    def _require_mention_for(self, chat_id: str, sender: Any = None) -> bool:
         rule = self._group_rules.get(chat_id) if chat_id else None
+        noat_overrides = getattr(self, "_noat_overrides", None)
+        if (chat_id and noat_overrides is not None
+                and noat_overrides.is_enabled(chat_id, self._noat_user_id(sender))):
+            return False
         if rule and rule.require_mention is not None:
             return rule.require_mention
         return self._require_mention
+
+    @staticmethod
+    def _noat_user_id(sender: Any) -> str:
+        sender_id = getattr(sender, "sender_id", None)
+        for value in (
+            getattr(sender_id, "user_id", None),
+            getattr(sender_id, "open_id", None),
+            getattr(sender_id, "union_id", None),
+        ):
+            if value:
+                return str(value).strip()
+        return ""
+
+    def handle_runtime_config(self, source, args: str) -> str:
+        """Handle Feishu runtime configuration without changing config.yaml."""
+        try:
+            tokens = shlex.split(args) if args else []
+        except ValueError:
+            return "Use: /config [list|get|set|unset] [<key>] [<value>]"
+        action = tokens[0].lower() if tokens else "list"
+        key = tokens[1] if len(tokens) > 1 else ""
+        if action == "list":
+            return f"**Runtime overrides** (this chat, you):\n  `feishu.noat` = {self._runtime_noat_value(source)}"
+        if action == "get":
+            if key != "feishu.noat":
+                return f"unknown key: {key}"
+            return self._runtime_noat_value(source)
+        if action in {"unset", "delete", "del", "remove", "rm"}:
+            action, value = "set", "off"
+        elif action == "set":
+            value = tokens[2].lower() if len(tokens) > 2 else ""
+        else:
+            return "Use: /config [list|get|set|unset] [<key>] [<value>]"
+        if key != "feishu.noat":
+            return f"unknown key: {key}"
+        if value not in {"on", "off", "true", "false", "1", "0", "yes", "no"}:
+            return "Value must be: on | off"
+        chat_id = str(getattr(source, "chat_id", "") or "").strip()
+        user_id = str(getattr(source, "user_id", "") or "").strip()
+        if not chat_id or not user_id:
+            return "(no chat or user context)"
+        enabled = value in {"on", "true", "1", "yes"}
+        try:
+            changed = self._noat_overrides.set_enabled(chat_id, user_id, enabled)
+        except OverridePersistenceError:
+            return "Runtime setting changed in memory but could not be persisted."
+        state = "on" if enabled else "off"
+        suffix = " (already in that state)" if not changed else ""
+        return f"`feishu.noat` = {state}{suffix}"
+
+    def _runtime_noat_value(self, source) -> str:
+        chat_id = str(getattr(source, "chat_id", "") or "").strip()
+        user_id = str(getattr(source, "user_id", "") or "").strip()
+        if not chat_id or not user_id:
+            return "(no chat or user context)"
+        return "on" if self._noat_overrides.is_enabled(chat_id, user_id) else "off"
 
     def _allow_group_message(self, sender_id: Any, chat_id: str = "", *, is_bot: bool = False) -> bool:
         """Per-group policy gate for non-DM traffic."""

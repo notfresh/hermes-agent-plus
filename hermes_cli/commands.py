@@ -154,8 +154,9 @@ COMMAND_REGISTRY: list[CommandDef] = [
     # Configuration
     CommandDef("alias", "List or set user-defined quick-command aliases (git-style, e.g. /alias /ss \"/sessions\")", "Configuration",
                aliases=("aliases",), args_hint='[/<name> "<expansion>"]'),
-    CommandDef("config", "Show current configuration", "Configuration",
-               cli_only=True, desktop="terminal"),
+    CommandDef("config", "View or change platform runtime configuration", "Configuration",
+               args_hint="[get|set|unset|list] [<key>] [<value>]",
+               busy_policy="dispatch"),
     CommandDef("model", "Switch model (session-scoped; --global to persist)", "Configuration",
                args_hint="[model] [--provider name] [--reasoning level] [--global|--session] [--refresh]",
                busy_policy="reject", busy_handler="model", desktop="hidden"),

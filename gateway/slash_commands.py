@@ -181,6 +181,17 @@ class GatewaySlashCommandsMixin(
 
     async_session_store: AsyncSessionStore
 
+    async def _handle_config_command(self, event: MessageEvent) -> str:
+        """Delegate runtime configuration to the adapter serving this source."""
+        adapter = self._delivery_adapter_for(event.source)
+        handler = getattr(adapter, "handle_runtime_config", None) if adapter else None
+        if handler is None:
+            return "Runtime configuration is not supported on this platform."
+        result = handler(event.source, event.get_command_args())
+        if inspect.isawaitable(result):
+            result = await result
+        return str(result)
+
     # ------------------------------------------------------------------ shared helpers
     def _cached_agent_for(self, session_key: str, *, lockless_fallback: bool = False):
         """Peek the cached AIAgent for *session_key* without evicting it, or None. Entries are
